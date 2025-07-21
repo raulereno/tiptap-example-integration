@@ -57,7 +57,6 @@ export default function EditDocumentPage() {
 
   // Handle placeholder detection
   const handlePlaceholders = useCallback((list: PlaceholderPos[]) => {
-    console.log(`Received ${list.length} placeholders in component:`, list.map(p => p.text))
     
     // Only update if placeholders actually changed
     setPlaceholders(prevPlaceholders => {
