@@ -542,7 +542,7 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & {
                             });
                         } catch (base64Error) {
                             console.error('TiptapEditor: Error converting base64:', base64Error);
-                            throw new Error(`Failed to convert base64 data: ${base64Error.message}`);
+                            throw new Error(`Failed to convert base64 data: ${base64Error instanceof Error ? base64Error.message : 'Unknown error'}`);
                         }
                     } else {
                         // For regular URLs, use the original fetch logic
