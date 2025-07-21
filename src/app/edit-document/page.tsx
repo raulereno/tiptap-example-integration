@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState, useCallback, useMemo } from 'react'
+import React, { useRef, useState, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TiptapEditor, { TiptapEditorRef, PlaceholderPos } from '@/components/TiptapEditor/TiptapEditor'
 import TiptapToolbar from '@/components/Toolbar/TiptapToolbar'
@@ -10,8 +10,9 @@ import { exportToDocx } from '@/utils/exportToDocx'
 import Link from 'next/link'
 import { useEditorDebounce } from '@/hooks/useDebounce'
 import { Download, Save } from '@mui/icons-material'
+import SpinnerLoader from '@/components/Common/SpinnerLoader'
 
-export default function EditDocumentPage() {
+function EditDocumentContent() {
   const searchParams = useSearchParams()
   const docUrl = searchParams?.get('doc')
   
@@ -332,5 +333,13 @@ export default function EditDocumentPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function EditDocumentPage() {
+  return (
+    <Suspense fallback={<SpinnerLoader />}>
+      <EditDocumentContent />
+    </Suspense>
   )
 } 

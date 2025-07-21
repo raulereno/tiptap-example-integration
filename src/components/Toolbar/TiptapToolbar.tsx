@@ -1,4 +1,4 @@
-import { Undo, Redo, FormatBold, FormatItalic, FormatUnderlined, FormatStrikethrough, FormatColorText, Highlight, FormatListBulleted, FormatListNumbered, FormatAlignLeft, FormatAlignCenter, FormatAlignRight, FormatAlignJustify, Link, Image, TableChart, Code, FormatQuote, ClearAll, Highlight as HighlightIcon, Link as LinkIcon, Image as ImageIcon, Code as CodeIcon, Superscript as SuperscriptIcon, Subscript as SubscriptIcon, HorizontalRule as HorizontalRuleIcon } from '@mui/icons-material';
+import { Undo, Redo, FormatBold, FormatItalic, FormatUnderlined, FormatStrikethrough, FormatColorText, FormatListBulleted, FormatListNumbered, FormatAlignLeft, FormatAlignCenter, FormatAlignRight, FormatAlignJustify, TableChart, FormatQuote, ClearAll, Highlight as HighlightIcon, Link as LinkIcon, Image as ImageIcon, Code as CodeIcon, Superscript as SuperscriptIcon, Subscript as SubscriptIcon, HorizontalRule as HorizontalRuleIcon } from '@mui/icons-material';
 
 // Export the Toolbar component separately
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
