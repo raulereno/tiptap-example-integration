@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useRef, useState, useCallback, useMemo, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Download, Save } from '@mui/icons-material'
 
@@ -12,6 +11,7 @@ import SpinnerLoader from '@/components/Common/SpinnerLoader'
 import { saveDraft } from '@/services/cases'
 import { exportToDocx } from '@/utils/exportToDocx'
 import { useEditorDebounce } from '@/hooks/useDebounce'
+import { useDocumentStorage } from '@/hooks/useLocalStorage'
 
 /**
  * Main content component for the document editor page
@@ -19,17 +19,12 @@ import { useEditorDebounce } from '@/hooks/useDebounce'
  */
 function EditDocumentContent() {
   // ============================================================================
-  // URL PARAMETERS & REFERENCES
-  // ============================================================================
-  
-  const searchParams = useSearchParams()
-  const docUrl = searchParams?.get('doc') // Get document URL from query parameters
-  const editorRef = useRef<TiptapEditorRef>(null) // Reference to the Tiptap editor instance
-
-  // ============================================================================
   // STATE MANAGEMENT
   // ============================================================================
   
+  const { documentUrl: docUrl, documentFilename: filename, clearDocument } = useDocumentStorage()
+  const editorRef = useRef<TiptapEditorRef>(null) // Reference to the Tiptap editor instance
+
   // Placeholder management
   const [placeholders, setPlaceholders] = useState<PlaceholderPos[]>([])
   
@@ -41,6 +36,22 @@ function EditDocumentContent() {
   // Editor readiness states
   const [isDocumentReady, setIsDocumentReady] = useState(false)
   const [isEditorReady, setIsEditorReady] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  // Cleanup localStorage when navigating back to home
+  const handleBackToHome = useCallback(() => {
+    clearDocument()
+  }, [clearDocument])
+
+  // Handle initial load state
+  React.useEffect(() => {
+    // Set initial load to false after a short delay to allow localStorage to be read
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false)
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [])
 
   // ============================================================================
   // UTILITY FUNCTIONS
@@ -231,21 +242,30 @@ function EditDocumentContent() {
 
   /**
    * Exports the current document content to DOCX format
-   * Generates a timestamped filename and triggers download
+   * Uses the original filename if available, otherwise generates a timestamped filename
    */
   const handleExport = useCallback(async () => {
     if (!editorRef.current) return
     
     const html = editorRef.current.getContent()
-    const filename = `document-${Date.now()}.docx`
+    
+    // Use original filename if available, otherwise generate a timestamped one
+    let exportFilename: string
+    if (filename) {
+      // Remove extension and add timestamp to avoid conflicts
+      const nameWithoutExt = filename.replace(/\.[^/.]+$/, '')
+      exportFilename = `${nameWithoutExt}-edited-${Date.now()}.docx`
+    } else {
+      exportFilename = `document-${Date.now()}.docx`
+    }
     
     try {
-      await exportToDocx(html, filename)
+      await exportToDocx(html, exportFilename)
     } catch (error) {
       console.error('Export failed:', error)
       alert('Failed to export document')
     }
-  }, [])
+  }, [filename])
 
   // ============================================================================
   // EFFECTS & LIFECYCLE MANAGEMENT
@@ -355,14 +375,25 @@ function EditDocumentContent() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Top Navigation Bar */}
             <div className="flex justify-between items-center h-12">
-              {/* Back Navigation */}
-              <div className="flex items-center">
+              {/* Back Navigation and Document Info */}
+              <div className="flex items-center space-x-4">
                 <Link 
                   href="/"
                   className="text-gray-600 hover:text-gray-900 font-medium"
+                  onClick={handleBackToHome}
                 >
                   ← Back to Home
                 </Link>
+                {filename && (
+                  <div className="text-sm text-gray-500 border-l border-gray-300 pl-4">
+                    📄 {filename}
+                  </div>
+                )}
+                {isInitialLoad && (
+                  <div className="text-sm text-blue-500 border-l border-gray-300 pl-4">
+                    ⏳ Loading document...
+                  </div>
+                )}
               </div>
               
               {/* Action Buttons and Status */}
@@ -420,7 +451,7 @@ function EditDocumentContent() {
             {/* Editor Toolbar */}
             <TiptapToolbar 
               editor={editorRef.current?.editor || null} 
-              isLoading={Boolean(docUrl && !isDocumentReady) || !isEditorReady} 
+              isLoading={isInitialLoad || Boolean(docUrl && !isDocumentReady) || !isEditorReady} 
             />
           </div>
         </header>

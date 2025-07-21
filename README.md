@@ -1,130 +1,160 @@
-# Tiptap DOCX Placeholder Demo
+# Tiptap DOCX Demo
 
-A **minimal, fully‑commented example** showing how to use **Tiptap 3** in a Next.js 14 (App Router) + TypeScript project to **import DOCX templates, highlight dynamic placeholders, edit content, autosave drafts, and export the result as a fresh DOCX file**.
+A minimal, fully-commented example showing how to use Tiptap 3 with DOCX import/export functionality.
 
-> **Goal**: provide a ready‑to‑fork playground you can read line‑by‑line to understand how every piece works.
+## ✨ Features
 
----
+- **Multiple Document Sources**: 
+  - Example document (pre-loaded sample)
+  - Custom URL (import from web)
+  - Local file upload (drag & drop or file picker)
+  - Blank document (start from scratch)
 
-## ✨ Key Features
+- **LocalStorage Integration**: 
+  - Document URLs and filenames are stored in localStorage
+  - Clean navigation without URL parameters
+  - Persistent state between sessions
 
-| Capability                                               | Where to look                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------------- |
-| Import `.docx` from URL or file picker                   | `components/TiptapEditor/TiptapEditor.tsx` (Imports section)  |
-| Detect & highlight placeholders (`{{name}}`, `[amount]`) | `VariableHighlightExtension.ts` (custom ProseMirror plugin)   |
-| Sidebar navigation for placeholders                      | `pages/edit-document.tsx` (state `placeholders` + sidebar UI) |
-| Autosave draft every 6 s                                 | `hooks/useDebounce.ts` + `services/cases.ts`                  |
-| Export edited HTML → DOCX                                | `utils/exportToDocx.ts` (browser‑only using `html-docx-js`)   |
+- **Advanced Editor Features**:
+  - Real-time placeholder detection and navigation
+  - Auto-save with debouncing
+  - Manual save functionality
+  - DOCX export with original filename preservation
+  - Rich text formatting toolbar
 
----
+- **Memory Management**:
+  - Automatic cleanup of blob URLs
+  - Efficient localStorage handling
+  - Proper component lifecycle management
 
-## 🏗️ Tech Stack
+## 🚀 Getting Started
 
-* **Next.js 14** (App Router, React 18, TypeScript)
-* **Tiptap 3** + Pro *Import DOCX* extension
-* **Tailwind CSS** for styling
-* **MUI icons** for toolbar buttons
-* **html-docx-js** + **FileSaver.js** for client‑side DOCX re‑generation
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
----
+2. **Set up your Tiptap token**:
+   - Get a token from [Tiptap Cloud](https://tiptap.dev/cloud)
+   - Add it to your environment variables or update the token generation logic
 
-## 📂 Folder Structure (trimmed)
+3. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Open your browser**:
+   Navigate to `http://localhost:3000`
+
+## 📁 Project Structure
 
 ```
-├─ components/
-│  ├─ TiptapEditor/
-│  │   ├─ TiptapEditor.tsx
-│  │   ├─ VariableHighlightExtension.ts
-│  │   └─ styles.css
-│  └─ Toolbar/
-│      └─ TiptapToolbar.tsx
-├─ pages/
-│  └─ edit-document.tsx
-├─ hooks/
-│  └─ useDebounce.ts
-├─ services/
-│  └─ cases.ts        # mocked API helpers
-├─ utils/
-│  └─ exportToDocx.ts # HTML → DOCX helper
-└─ README.md          # you are here
+src/
+├── app/
+│   ├── page.tsx                 # Home page with document selection
+│   ├── edit-document/
+│   │   └── page.tsx            # Main editor page
+│   └── api/
+│       ├── export-docx/        # DOCX export endpoint
+│       └── generate-token/     # Tiptap token generation
+├── components/
+│   ├── TiptapEditor/           # Main editor component
+│   ├── Toolbar/                # Rich text toolbar
+│   └── Common/                 # Shared components
+├── hooks/
+│   ├── useDebounce.ts          # Debounced operations
+│   └── useLocalStorage.ts      # localStorage management
+├── services/
+│   └── cases.ts               # API service functions
+└── utils/
+    ├── exportToDocx.ts        # DOCX export utilities
+    └── blobUtils.ts           # Blob URL management
 ```
 
----
+## 🔧 Key Components
 
-## 🚀 Getting Started
+### Home Page (`src/app/page.tsx`)
+- Four document source options
+- LocalStorage integration for document URLs
+- File upload with blob URL management
+- Responsive grid layout
 
-### 1  Prerequisites
+### Editor Page (`src/app/edit-document/page.tsx`)
+- Main document editing interface
+- Placeholder detection and navigation
+- Auto-save and manual save functionality
+- DOCX export with filename preservation
 
-* **Node ≥ 18**
-* **pnpm / npm / yarn** latest
-* A **Tiptap Cloud** account (free *Start* plan) to obtain a **Pro token** for the Import DOCX extension.
+### LocalStorage Hook (`src/hooks/useLocalStorage.ts`)
+- Custom hook for localStorage management
+- Type-safe document storage
+- Automatic cleanup and error handling
 
-### 2  Clone & Install
+### Blob Utils (`src/utils/blobUtils.ts`)
+- Efficient blob URL management
+- Memory leak prevention
+- Cleanup utilities
 
-```bash
-git clone https://github.com/your-handle/tiptap-docx-demo.git
-cd tiptap-docx-demo
-pnpm install   # or npm i / yarn
+## 🎯 Usage Examples
+
+### Loading a Document from URL
+```typescript
+const { saveDocument } = useDocumentStorage()
+saveDocument('https://example.com/document.docx', 'My Document.docx')
+router.push('/edit-document')
 ```
 
-### 3  Environment variables
-
-Create a `.env.local` file:
-
-```bash
-# .env.local
-NEXT_PUBLIC_TIPTAP_APP_ID=your‑tiptap‑app‑id
-TIPTAP_PRO_TOKEN=your‑pro‑token
+### Uploading a Local File
+```typescript
+const handleFileUpload = (file: File) => {
+  const blobUrl = URL.createObjectURL(file)
+  saveDocument(blobUrl, file.name)
+  router.push('/edit-document')
+}
 ```
 
-> **Why two vars?** `TIPTAP_PRO_TOKEN` is fetched server‑side (API route) and never shipped to the client; `NEXT_PUBLIC_TIPTAP_APP_ID` *is* public and required by Tiptap Pro.
-
-### 4  Run the dev server
-
-```bash
-pnpm dev   # http://localhost:3000
+### Exporting with Original Filename
+```typescript
+const exportFilename = filename 
+  ? `${filename.replace(/\.[^/.]+$/, '')}-edited-${Date.now()}.docx`
+  : `document-${Date.now()}.docx`
 ```
 
-Open **`/edit-document?doc=http://example.com/letter.docx`** in the browser, or use the file picker on the page.
+## 🔒 LocalStorage Keys
 
-### 5  Build for production
+The application uses the following localStorage keys:
+- `tiptap_document_url`: Stores the current document URL
+- `tiptap_document_filename`: Stores the original filename
 
-```bash
-pnpm build && pnpm start
-```
+## 🧹 Memory Management
 
----
+- Blob URLs are automatically cleaned up when components unmount
+- localStorage is cleared when navigating back to home
+- Efficient state management prevents memory leaks
 
-## 🔍 How It Works (High Level)
+## 🎨 Styling
 
-1. **`TiptapEditor`** loads core + extra extensions, and conditionally adds *Import DOCX* when the token is valid.
-2. If a `docUrl` ending in `.docx` is provided, the editor fetches the file, wraps it in a `File` object and invokes `editor.chain().importDocx()`.
-3. A custom **ProseMirror plugin** scans every text node for `/{{.*?}}|\[.*?]/g`, adds `Decoration.inline(...)` to highlight, and emits an array for the sidebar.
-4. `edit-document` keeps that array in React state, rendering a clickable list that calls `editor.navigateToPlaceholder(pos)`.
-5. A `useDebounce` hook triggers `saveDraft(html)` every 6 seconds.
-6. When the user clicks **Download DOCX**, the current HTML is passed to `html-docx-js`, converted, and downloaded with `FileSaver`.
+- Built with Tailwind CSS
+- Responsive design for all screen sizes
+- Material-UI icons for consistent UI
+- Smooth transitions and hover effects
 
----
+## 📝 Development Notes
 
-## 📝 Scripts
+- Uses Next.js 14 with App Router
+- TypeScript for type safety
+- Tiptap 3 with Pro extensions
+- LocalStorage for state persistence
+- Blob URLs for local file handling
 
-| Command      | Purpose                            |
-| ------------ | ---------------------------------- |
-| `pnpm dev`   | Start dev server with hot reload   |
-| `pnpm build` | Next.js production build           |
-| `pnpm start` | Start compiled app (needs `build`) |
-| `pnpm lint`  | ESLint + TypeScript checks         |
+## 🤝 Contributing
 
----
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-## 🤖 Customization Tips
+## 📄 License
 
-* **Change placeholder regex** → edit `VariableHighlightExtension.ts`.
-* **Add more toolbar items** → extend `components/Toolbar/TiptapToolbar.tsx`.
-* **Server‑side DOCX export** → swap `html-docx-js` for a call to LibreOffice / Microsoft Graph in `api/export-docx.ts`.
-
----
-
-## 📜 License
-
-MIT — use it, fork it, star it. Enjoy! 🚀
+This project is licensed under the MIT License.
