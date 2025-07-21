@@ -9,7 +9,6 @@ import { saveDraft } from '@/services/cases'
 import { exportToDocx } from '@/utils/exportToDocx'
 import Link from 'next/link'
 import useDebounce from '@/hooks/useDebounce'
-import SpinnerLoader from '@/components/Common/SpinnerLoader'
 import { Download } from '@mui/icons-material'
 
 export default function EditDocumentPage() {

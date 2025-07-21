@@ -29,6 +29,7 @@
     "@tiptap/extension-underline": "^2.14.0",
     "@tiptap/react": "^2.14.0",
     "@tiptap/starter-kit": "^2.14.0",
+    "docx": "^9.5.1",
     "jsonwebtoken": "^9.0.2",
     "next": "15.4.2",
     "prosemirror-state": "^1.4.3",

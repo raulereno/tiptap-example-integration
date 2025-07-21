@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Your App",
-  description: "Your app description",
+  title: "Tiptap Editor",
+  description: "Example of a tiptap editor implementation with placeholders and export to docx functionality.",
 };
 
 export default function RootLayout({

@@ -1,11 +1,7 @@
 /**
  * Utility for exporting HTML content to DOCX format
- * Uses html-docx-js for client-side conversion
+ * Uses server-side API endpoint for conversion
  */
-
-// Note: In a real implementation, you would install and import:
-// import htmlDocx from 'html-docx-js'
-// import { saveAs } from 'file-saver'
 
 /**
  * Convert HTML content to DOCX and trigger download
@@ -15,18 +11,28 @@
  */
 export async function exportToDocx(html: string, filename: string): Promise<void> {
   try {
-    // This is a placeholder implementation
-    // In a real app, you would use html-docx-js like this:
+    // Send HTML to server for conversion
+    const response = await fetch('/api/export-docx', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ html, filename }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    // Get the DOCX blob from the response
+    const blob = await response.blob()
     
-    // const converted = htmlDocx.asBlob(html)
-    // saveAs(converted, filename)
-    
-    // For now, we'll create a simple text file as a fallback
-    const blob = new Blob([html], { type: 'text/html' })
+    // Create download link
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = filename.replace('.docx', '.html')
+    link.download = filename
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -45,12 +51,25 @@ export async function exportToDocx(html: string, filename: string): Promise<void
  * @returns Promise that resolves to Blob
  */
 export async function htmlToDocxBlob(html: string): Promise<Blob> {
-  // Placeholder implementation
-  // In a real app, you would use html-docx-js:
-  // return htmlDocx.asBlob(html)
-  
-  // For now, return HTML blob as fallback
-  return new Blob([html], { type: 'text/html' })
+  try {
+    const response = await fetch('/api/export-docx', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ html, filename: 'document.docx' }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    return await response.blob()
+  } catch (error) {
+    console.error('HTML to DOCX conversion failed:', error)
+    throw new Error('Failed to convert HTML to DOCX')
+  }
 }
 
 /**
