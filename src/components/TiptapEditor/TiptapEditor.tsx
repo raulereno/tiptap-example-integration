@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import React, { forwardRef, useImperativeHandle, useCallback, useRef, useState, useEffect, useMemo } from 'react';
 
@@ -14,7 +15,8 @@ export interface TiptapEditorRef {
     importDocx: (file: File) => Promise<void>;
     navigateToPlaceholder: (placeholder: PlaceholderPos) => void;
     isReady: boolean;
-    editor: any; // Editor type from @tiptap/core
+    isLoading: boolean;
+    editor: Editor | null;
 }
 
 export interface PlaceholderPos {
@@ -23,7 +25,7 @@ export interface PlaceholderPos {
     from: number;
     to: number;
 }
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Color from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
@@ -35,7 +37,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
 import TextAlign from '@tiptap/extension-text-align';
-import TextStyle from '@tiptap/extension-text-style';
+import { TextStyle } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import { Extension } from '@tiptap/core';
 import ImportDocx from '@tiptap-pro/extension-import-docx';
@@ -94,23 +96,23 @@ const FontSize = Extension.create({
     },
     addCommands() {
         return {
-            setFontSize: (fontSize) => ({ chain }) => {
+            setFontSize: (fontSize: string) => ({ chain }: { chain: any }) => {
                 return chain()
                     .setMark('textStyle', { fontSize })
                     .run();
             },
-            unsetFontSize: () => ({ chain }) => {
+            unsetFontSize: () => ({ chain }: { chain: any }) => {
                 return chain()
                     .setMark('textStyle', { fontSize: null })
                     .removeEmptyTextStyle()
                     .run();
             },
-        };
+        } as any;
     },
 });
 
 // Export the Toolbar component separately
-export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: boolean }) => { // Editor type from @tiptap/core
+export const TiptapToolbar = ({ editor, isLoading }: { editor: Editor | null; isLoading: boolean }) => {
     // Solo deshabilitar si realmente está cargando, no por falta de editor
     const isDisabled = isLoading;
 
@@ -185,7 +187,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                         className="size-select"
                         onChange={(e) => {
                             if (editor && e.target.value) {
-                                editor.chain().focus().setFontSize(e.target.value).run();
+                                (editor.chain().focus() as any).setFontFamily(e.target.value).run();
                             }
                         }}
                         defaultValue=""
@@ -328,7 +330,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Justify"
-                        onClick={() => editor.chain().focus().setTextAlign('justify').run()}
+                        onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
                         className={`toolbar-icon-btn ${editor?.isActive({ textAlign: 'justify' }) ? 'active' : ''}`}
                     >
                         <FormatAlignJustify sx={{ fontSize: 18 }} />
@@ -343,6 +345,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                         type="button"
                         title="Insert Link"
                         onClick={() => {
+                            if (!editor) return;
                             const previousUrl = editor.getAttributes('link').href;
                             const url = window.prompt('Enter URL:', previousUrl);
 
@@ -363,6 +366,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                         type="button"
                         title="Insert Image"
                         onClick={() => {
+                            if (!editor) return;
                             const url = window.prompt('Enter image URL:');
                             if (url) {
                                 editor.chain().focus().setImage({ src: url }).run();
@@ -375,7 +379,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Insert Table"
-                        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+                        onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
                         className="toolbar-icon-btn"
                     >
                         <TableChart sx={{ fontSize: 18 }} />
@@ -389,7 +393,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Code"
-                        onClick={() => editor.chain().focus().toggleCode().run()}
+                        onClick={() => editor?.chain().focus().toggleCode().run()}
                         className={`toolbar-icon-btn ${editor?.isActive('code') ? 'active' : ''}`}
                     >
                         <CodeIcon sx={{ fontSize: 18 }} />
@@ -397,7 +401,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Blockquote"
-                        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+                        onClick={() => editor?.chain().focus().toggleBlockquote().run()}
                         className={`toolbar-icon-btn ${editor?.isActive('blockquote') ? 'active' : ''}`}
                     >
                         <FormatQuote sx={{ fontSize: 18 }} />
@@ -406,7 +410,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Horizontal Rule"
-                        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+                        onClick={() => editor?.chain().focus().setHorizontalRule().run()}
                         className="toolbar-icon-btn"
                     >
                         <HorizontalRuleIcon sx={{ fontSize: 18 }} />
@@ -414,7 +418,7 @@ export const TiptapToolbar = ({ editor, isLoading }: { editor: any; isLoading: b
                     <button
                         type="button"
                         title="Clear Formatting"
-                        onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+                        onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
                         className="toolbar-icon-btn clear-formatting"
                     >
                         <ClearAll sx={{ fontSize: 18 }} />
@@ -456,6 +460,41 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             Underline,
             VariableHighlightExtension,
             FontSize,
+            // Add FontFamily extension
+            Extension.create({
+                name: 'fontFamily',
+                addGlobalAttributes() {
+                    return [
+                        {
+                            types: ['textStyle'],
+                            attributes: {
+                                fontFamily: {
+                                    default: null,
+                                    parseHTML: element => element.style.fontFamily,
+                                    renderHTML: attributes => {
+                                        if (!attributes.fontFamily) {
+                                            return {};
+                                        }
+                                        return {
+                                            style: `font-family: ${attributes.fontFamily}`,
+                                        };
+                                    },
+                                },
+                            },
+                        },
+                    ];
+                },
+                addCommands() {
+                    return {
+                        setFontFamily: (fontFamily: string) => ({ commands }: { commands: any }) => {
+                            return commands.setMark('textStyle', { fontFamily });
+                        },
+                        unsetFontFamily: () => ({ commands }: { commands: any }) => {
+                            return commands.unsetMark('textStyle');
+                        },
+                    } as any;
+                },
+            }),
         ];
 
         // Only add ImportDocx if we have a valid token to prevent timeout errors
@@ -507,7 +546,7 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             const text = node.text || '';
             let match;
             const regex = new RegExp(placeholderRegex.source, 'g'); // Create new regex instance for each text node
-            
+
             while ((match = regex.exec(text)) !== null) {
                 const rawText = match[0];
 
@@ -538,12 +577,31 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
                 });
             }
         });
-        
+
         // Debug log to see how many placeholders were found
         console.log(`Found ${found.length} placeholders:`, found.map(p => p.text));
-        
+
         return found;
     }, [isEmptyPlaceholder]);
+
+    // Ref to store the timeout ID for debounced placeholder detection
+    const placeholderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Debounced placeholder detection to avoid constant re-renders
+    const debouncedPlaceholderDetection = useCallback((editorInstance: any) => {
+        if (!onPlaceholdersChange) return;
+
+        // Clear previous timeout
+        if (placeholderTimeoutRef.current) {
+            clearTimeout(placeholderTimeoutRef.current);
+        }
+
+        // Set new timeout
+        placeholderTimeoutRef.current = setTimeout(() => {
+            onPlaceholdersChange(findPlaceholders(editorInstance));
+            placeholderTimeoutRef.current = null;
+        }, 300); // 300ms debounce
+    }, [onPlaceholdersChange, findPlaceholders]);
 
     const editor = useEditor({
         extensions,
@@ -558,9 +616,8 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             if (onUpdate && typeof onUpdate === 'function') {
                 onUpdate(updatedEditor.getHTML());
             }
-            if (onPlaceholdersChange) {
-                onPlaceholdersChange(findPlaceholders(updatedEditor));
-            }
+            // Debounced placeholder detection
+            debouncedPlaceholderDetection(updatedEditor);
         },
         onCreate: ({ editor: createdEditor }) => {
             // Buscar placeholders cuando el editor se crea
@@ -700,6 +757,10 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             if (editor) {
                 editor.destroy();
             }
+            // Clear any pending placeholder detection timeout
+            if (placeholderTimeoutRef.current) {
+                clearTimeout(placeholderTimeoutRef.current);
+            }
         };
     }, [editor]);
 
@@ -709,6 +770,7 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         importDocx: (file: File) => importDocxFile(file),
         navigateToPlaceholder: handlePlaceholderNavigation,
         isReady: !!editor,
+        isLoading: isLoading,
         editor: editor, // Expose editor instance for external toolbar
     }));
 
@@ -784,7 +846,8 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
         importDocx: (file: File) => editorCoreRef.current?.importDocx(file) || Promise.resolve(),
         navigateToPlaceholder: (position: any) => editorCoreRef.current?.navigateToPlaceholder(position),
         isReady: !!tiptapToken,
-        editor: editorCoreRef.current?.editor, // Expose editor instance
+        isLoading: editorCoreRef.current?.isLoading || false,
+        editor: editorCoreRef.current?.editor || null, // Expose editor instance
     }));
 
     if (error && error.message.includes('timed out')) {
@@ -812,6 +875,8 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
         // If no token and no error, show loading
         return <SpinnerLoader />
     }
+
+
 
     // Only pass docUrl if we have a valid token
     return (

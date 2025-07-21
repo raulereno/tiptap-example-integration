@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TiptapEditor, { TiptapEditorRef, PlaceholderPos } from '@/components/TiptapEditor/TiptapEditor'
 import TiptapToolbar from '@/components/Toolbar/TiptapToolbar'
@@ -9,19 +9,8 @@ import { saveDraft } from '@/services/cases'
 import { exportToDocx } from '@/utils/exportToDocx'
 import Link from 'next/link'
 import useDebounce from '@/hooks/useDebounce'
-
-// Function to format placeholder text
-const formatPlaceholderText = (placeholderText: string): string => {
-  // Remove the placeholder delimiters
-  let text = placeholderText.replace(/[{}[\]]/g, '')
-  
-  // Convert snake_case or kebab-case to Title Case
-  text = text
-    .replace(/[-_]/g, ' ') // Replace hyphens and underscores with spaces
-    .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize first letter of each word
-  
-  return text
-}
+import SpinnerLoader from '@/components/Common/SpinnerLoader'
+import { Download } from '@mui/icons-material'
 
 export default function EditDocumentPage() {
   const searchParams = useSearchParams()
@@ -31,6 +20,20 @@ export default function EditDocumentPage() {
   const [placeholders, setPlaceholders] = useState<PlaceholderPos[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [isDocumentReady, setIsDocumentReady] = useState(false)
+
+  // Function to format placeholder text
+  const formatPlaceholderText = useCallback((placeholderText: string): string => {
+    // Remove the placeholder delimiters
+    let text = placeholderText.replace(/[{}[\]]/g, '')
+    
+    // Convert snake_case or kebab-case to Title Case
+    text = text
+      .replace(/[-_]/g, ' ') // Replace hyphens and underscores with spaces
+      .replace(/\b\w/g, (char) => char.toUpperCase()) // Capitalize first letter of each word
+    
+    return text
+  }, [])
 
   // Debounced save function
   const debouncedSave = useDebounce(async (html: string) => {
@@ -48,23 +51,42 @@ export default function EditDocumentPage() {
   }, 6000) // Save every 6 seconds
 
   // Handle editor updates
-  const handleEditorUpdate = (html: string) => {
+  const handleEditorUpdate = useCallback((html: string) => {
     debouncedSave(html)
-  }
+  }, [debouncedSave])
 
   // Handle placeholder detection
-  const handlePlaceholders = (list: PlaceholderPos[]) => {
+  const handlePlaceholders = useCallback((list: PlaceholderPos[]) => {
     console.log(`Received ${list.length} placeholders in component:`, list.map(p => p.text))
-    setPlaceholders(list)
-  }
+    
+    // Only update if placeholders actually changed
+    setPlaceholders(prevPlaceholders => {
+      // If length is different, definitely changed
+      if (prevPlaceholders.length !== list.length) {
+        return list
+      }
+      
+      // Check if any placeholder text or position changed
+      const hasChanged = list.some((newPlaceholder, index) => {
+        const prevPlaceholder = prevPlaceholders[index]
+        return !prevPlaceholder || 
+               newPlaceholder.text !== prevPlaceholder.text ||
+               newPlaceholder.from !== prevPlaceholder.from ||
+               newPlaceholder.to !== prevPlaceholder.to
+      })
+      
+      // Only return new array if something actually changed
+      return hasChanged ? list : prevPlaceholders
+    })
+  }, [])
 
   // Navigate to placeholder
-  const navigateToPlaceholder = (pos: PlaceholderPos) => {
+  const navigateToPlaceholder = useCallback((pos: PlaceholderPos) => {
     editorRef.current?.navigateToPlaceholder(pos)
-  }
+  }, [])
 
   // Export document
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     if (!editorRef.current) return
     
     const html = editorRef.current.getContent()
@@ -76,7 +98,64 @@ export default function EditDocumentPage() {
       console.error('Export failed:', error)
       alert('Failed to export document')
     }
-  }
+  }, [])
+
+  // Monitor document import status
+  React.useEffect(() => {
+    if (!docUrl) {
+      // If no docUrl, document is ready immediately
+      setIsDocumentReady(true)
+      return
+    }
+
+    // If there's a docUrl, wait for the editor to be ready and not loading
+    const checkDocumentStatus = () => {
+      if (editorRef.current?.isReady && !editorRef.current?.isLoading) {
+        setIsDocumentReady(true)
+      }
+    }
+
+    // Check immediately
+    checkDocumentStatus()
+
+    // Set up interval to check status
+    const interval = setInterval(checkDocumentStatus, 100)
+
+    return () => clearInterval(interval)
+  }, [docUrl])
+
+  // Memoize the sidebar content to prevent unnecessary re-renders
+  const sidebarContent = useMemo(() => {
+    if (placeholders.length === 0) return null
+
+    return (
+      <div className="fixed top-0 right-0 w-72 bg-white flex flex-col z-10 h-full pt-24 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.1)]">
+        <div className="font-semibold mb-2 p-4 bg-white shadow-sm sticky top-0 z-10">
+          Placeholders 
+          <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+            {placeholders.length}
+          </span>
+        </div>
+        <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
+          {placeholders.map((placeholder, index) => (
+            <button
+              key={`${placeholder.from}-${index}`}
+              className="placeholder-item text-left px-3 py-2 rounded border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 ease-out transform hover:scale-[1.02]"
+              onClick={() => navigateToPlaceholder(placeholder)}
+              title={placeholder.text}
+            >
+              <div className="text-sm font-medium text-gray-800 truncate">
+                {formatPlaceholderText(placeholder.text)}
+              </div>
+              <div className="text-xs text-gray-500 truncate mt-1">
+                {placeholder.text}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }, [placeholders, navigateToPlaceholder, formatPlaceholderText])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -105,59 +184,51 @@ export default function EditDocumentPage() {
                 )}
                 <button
                   onClick={handleExport}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:scale-105 font-medium"
+                  title="Download DOCX"
                 >
-                  Download DOCX
+                  <Download sx={{ fontSize: 16 }} />
+                  <span className="text-sm">Download</span>
                 </button>
               </div>
             </div>
             <TiptapToolbar 
               editor={editorRef.current?.editor || null} 
-              isLoading={false} 
+              isLoading={Boolean(docUrl && !isDocumentReady)} 
             />
           </div>
         </header>
       </div>
 
       {/* Fixed Sidebar - Only show when there are placeholders */}
-      {placeholders.length > 0 && (
-        <div className="fixed top-0 right-0 w-72 bg-white border-l flex flex-col z-10 h-full pt-24">
-          <div className="font-semibold mb-2 p-4 bg-white border-b sticky top-0 z-10">
-            Placeholders 
-            <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
-              {placeholders.length}
-            </span>
-          </div>
-          <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
-            {placeholders.map((placeholder, index) => (
-              <button
-                key={`${placeholder.from}-${index}`}
-                className="text-left px-3 py-2 rounded border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                onClick={() => navigateToPlaceholder(placeholder)}
-                title={placeholder.text}
-              >
-                <div className="text-sm font-medium text-gray-800 truncate">
-                  {formatPlaceholderText(placeholder.text)}
-                </div>
-                <div className="text-xs text-gray-500 truncate mt-1">
-                  {placeholder.text}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {sidebarContent}
 
       {/* Main Content Area - Scrollable */}
       <div className={`pt-28 ${placeholders.length > 0 ? 'pr-72' : ''}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div>
+          <div className="relative">
+            {/* Always render the editor */}
             <TiptapEditor
               ref={editorRef}
               docUrl={docUrl || undefined}
               onUpdate={handleEditorUpdate}
               onPlaceholders={handlePlaceholders}
             />
+            
+            {/* Show loading overlay when importing */}
+            {docUrl && !isDocumentReady && (
+              <div className="absolute inset-0 bg-white flex flex-col items-center justify-center min-h-[400px] space-y-4 z-50">
+                <SpinnerLoader />
+                <div className="text-center">
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    Importing Document...
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Please wait while we process your document and detect placeholders.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
