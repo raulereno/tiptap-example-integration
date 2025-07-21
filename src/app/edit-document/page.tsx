@@ -2,31 +2,59 @@
 
 import React, { useRef, useState, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { Download, Save } from '@mui/icons-material'
+
+// Local imports
 import TiptapEditor, { TiptapEditorRef, PlaceholderPos } from '@/components/TiptapEditor/TiptapEditor'
 import TiptapToolbar from '@/components/Toolbar/TiptapToolbar'
-
+import SpinnerLoader from '@/components/Common/SpinnerLoader'
 import { saveDraft } from '@/services/cases'
 import { exportToDocx } from '@/utils/exportToDocx'
-import Link from 'next/link'
 import { useEditorDebounce } from '@/hooks/useDebounce'
-import { Download, Save } from '@mui/icons-material'
-import SpinnerLoader from '@/components/Common/SpinnerLoader'
 
+/**
+ * Main content component for the document editor page
+ * Handles all the core functionality including saving, placeholder detection, and export
+ */
 function EditDocumentContent() {
-  const searchParams = useSearchParams()
-  const docUrl = searchParams?.get('doc')
+  // ============================================================================
+  // URL PARAMETERS & REFERENCES
+  // ============================================================================
   
-  const editorRef = useRef<TiptapEditorRef>(null)
+  const searchParams = useSearchParams()
+  const docUrl = searchParams?.get('doc') // Get document URL from query parameters
+  const editorRef = useRef<TiptapEditorRef>(null) // Reference to the Tiptap editor instance
+
+  // ============================================================================
+  // STATE MANAGEMENT
+  // ============================================================================
+  
+  // Placeholder management
   const [placeholders, setPlaceholders] = useState<PlaceholderPos[]>([])
+  
+  // Save state management
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  
+  // Editor readiness states
   const [isDocumentReady, setIsDocumentReady] = useState(false)
   const [isEditorReady, setIsEditorReady] = useState(false)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  // Function to format placeholder text
+  // ============================================================================
+  // UTILITY FUNCTIONS
+  // ============================================================================
+
+  /**
+   * Formats placeholder text for display in the sidebar
+   * Converts placeholder syntax to human-readable format
+   * 
+   * @param placeholderText - Raw placeholder text (e.g., "{{user_name}}", "[company_name]")
+   * @returns Formatted text (e.g., "User Name", "Company Name")
+   */
   const formatPlaceholderText = useCallback((placeholderText: string): string => {
-    // Remove the placeholder delimiters
+    // Remove placeholder delimiters: {}, [], {{}}
     let text = placeholderText.replace(/[{}[\]]/g, '')
     
     // Convert snake_case or kebab-case to Title Case
@@ -37,8 +65,18 @@ function EditDocumentContent() {
     return text
   }, [])
 
-  // Save function
+  // ============================================================================
+  // CORE BUSINESS LOGIC
+  // ============================================================================
+
+  /**
+   * Handles saving the document content to the backend
+   * Updates save state and timestamps
+   * 
+   * @param html - The HTML content to save
+   */
   const handleSave = useCallback(async (html: string) => {
+    // Validate input
     if (!html || typeof html !== 'string' || !html.trim()) return
     
     setIsSaving(true)
@@ -53,87 +91,108 @@ function EditDocumentContent() {
     }
   }, [])
 
-  // Placeholder detection function
+  /**
+   * Detects and extracts placeholders from the current editor content
+   * Supports multiple placeholder formats: {{variable}}, [variable], {{variable|label}}
+   * Updates the placeholders state only when changes are detected
+   */
   const handlePlaceholderUpdate = useCallback(() => {
-    if (editorRef.current?.editor) {
-      // Get placeholders from the current editor state
-      const editorInstance = editorRef.current.editor
+    if (!editorRef.current?.editor) return
+    
+    const editorInstance = editorRef.current.editor
+    const placeholderRegex = /{{.*?}}|\[.*?\]/g
+    const found: PlaceholderPos[] = []
+
+    // Traverse all text nodes in the document
+    editorInstance.state.doc.descendants((node: { isText: boolean; text?: string }, pos: number) => {
+      if (!node.isText) return
+
+      const text = node.text || ''
+      let match
+      const regex = new RegExp(placeholderRegex.source, 'g')
       
-      // Use the same placeholder detection logic that's in TiptapEditor
-      const placeholderRegex = /{{.*?}}|\[.*?\]/g
-      const found: PlaceholderPos[] = []
+      // Find all placeholder matches in this text node
+      while ((match = regex.exec(text)) !== null) {
+        const rawText = match[0]
 
-      editorInstance.state.doc.descendants((node: { isText: boolean; text?: string }, pos: number) => {
-        if (!node.isText) return
+        // Skip empty placeholders for cleaner navigation
+        if (rawText === '[]' || rawText === '{}' || rawText === '{{}}') {
+          continue
+        }
 
-        const text = node.text || ''
-        let match
-        const regex = new RegExp(placeholderRegex.source, 'g')
-        
-        while ((match = regex.exec(text)) !== null) {
-          const rawText = match[0]
+        let label = rawText
 
-          // Skip empty placeholders for the navigation list
-          if (rawText === '[]' || rawText === '{}' || rawText === '{{}}') {
-            continue
-          }
-
-          let label = rawText
-
-          if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
-            const parts = rawText.slice(2, -2).split('|')
-            if (parts.length > 1) {
-              const potentialLabel = parts[parts.length - 2]
-              if (potentialLabel) {
-                label = potentialLabel.trim()
-              }
+        // Handle different placeholder formats
+        if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
+          // Format: {{variable|label}} - extract the label
+          const parts = rawText.slice(2, -2).split('|')
+          if (parts.length > 1) {
+            const potentialLabel = parts[parts.length - 2]
+            if (potentialLabel) {
+              label = potentialLabel.trim()
             }
-          } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
-            label = rawText.slice(1, -1).trim()
           }
-
-          found.push({
-            text: rawText,
-            label: label,
-            from: pos + match.index,
-            to: pos + match.index + rawText.length,
-          })
+        } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
+          // Format: [variable] - extract the variable name
+          label = rawText.slice(1, -1).trim()
         }
-      })
 
-      // Update placeholders only if they've changed
-      setPlaceholders(prevPlaceholders => {
-        if (prevPlaceholders.length !== found.length) {
-          return found
-        }
-        
-        const hasChanged = found.some((newPlaceholder, index) => {
-          const prevPlaceholder = prevPlaceholders[index]
-          return !prevPlaceholder || 
-                 newPlaceholder.text !== prevPlaceholder.text ||
-                 newPlaceholder.from !== prevPlaceholder.from ||
-                 newPlaceholder.to !== prevPlaceholder.to
+        found.push({
+          text: rawText,
+          label: label,
+          from: pos + match.index,
+          to: pos + match.index + rawText.length,
         })
-        
-        return hasChanged ? found : prevPlaceholders
+      }
+    })
+
+    // Optimize re-renders by only updating when placeholders actually change
+    setPlaceholders(prevPlaceholders => {
+      if (prevPlaceholders.length !== found.length) {
+        return found
+      }
+      
+      const hasChanged = found.some((newPlaceholder, index) => {
+        const prevPlaceholder = prevPlaceholders[index]
+        return !prevPlaceholder || 
+               newPlaceholder.text !== prevPlaceholder.text ||
+               newPlaceholder.from !== prevPlaceholder.from ||
+               newPlaceholder.to !== prevPlaceholder.to
       })
-    }
+      
+      return hasChanged ? found : prevPlaceholders
+    })
   }, [])
 
-  // Enhanced debounced editor update with 5-second delay
+  // ============================================================================
+  // DEBOUNCED OPERATIONS
+  // ============================================================================
+
+  /**
+   * Debounced editor operations to prevent excessive API calls
+   * Automatically saves content and updates placeholders after 5 seconds of inactivity
+   */
   const { debouncedUpdate, manualSave, isManualSaveDisabled } = useEditorDebounce(
     handleSave,
     handlePlaceholderUpdate,
-    5000 // 5 seconds
+    5000 // 5 second delay
   )
 
-  // Handle editor updates - only trigger debounced operations
+  /**
+   * Handles editor content updates
+   * Triggers debounced save and placeholder detection
+   * 
+   * @param html - Updated HTML content from the editor
+   */
   const handleEditorUpdate = useCallback((html: string) => {
     setHasUnsavedChanges(true)
     debouncedUpdate(html)
   }, [debouncedUpdate])
 
-  // Handle manual save
+  /**
+   * Handles manual save button clicks
+   * Bypasses debouncing for immediate save
+   */
   const handleManualSave = useCallback(async () => {
     if (!editorRef.current) return
     
@@ -143,19 +202,37 @@ function EditDocumentContent() {
     }
   }, [manualSave, isManualSaveDisabled])
 
-  // Handle placeholder detection from editor (for initial load only)
+  // ============================================================================
+  // PLACEHOLDER NAVIGATION
+  // ============================================================================
+
+  /**
+   * Handles initial placeholder detection when document loads
+   * Only used for initial load; subsequent updates use debounced detection
+   * 
+   * @param list - List of placeholders found in the document
+   */
   const handlePlaceholders = useCallback((list: PlaceholderPos[]) => {
-    // Only use this for initial placeholder detection when document loads
-    // During editing, placeholder detection will be handled by the debounced update
     setPlaceholders(list)
   }, [])
 
-  // Navigate to placeholder
+  /**
+   * Navigates the editor cursor to a specific placeholder
+   * 
+   * @param pos - Placeholder position information
+   */
   const navigateToPlaceholder = useCallback((pos: PlaceholderPos) => {
     editorRef.current?.navigateToPlaceholder(pos)
   }, [])
 
-  // Export document
+  // ============================================================================
+  // EXPORT FUNCTIONALITY
+  // ============================================================================
+
+  /**
+   * Exports the current document content to DOCX format
+   * Generates a timestamped filename and triggers download
+   */
   const handleExport = useCallback(async () => {
     if (!editorRef.current) return
     
@@ -170,10 +247,17 @@ function EditDocumentContent() {
     }
   }, [])
 
-  // Monitor editor and document status
+  // ============================================================================
+  // EFFECTS & LIFECYCLE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Monitors editor and document loading status
+   * Ensures proper initialization sequence for document loading
+   */
   React.useEffect(() => {
     if (!docUrl) {
-      // If no docUrl, document is ready immediately
+      // No document URL means we're creating a new document
       setIsDocumentReady(true)
       return
     }
@@ -183,48 +267,61 @@ function EditDocumentContent() {
       const editor = editorRef.current
       if (editor?.isReady && !editor?.isLoading) {
         setIsEditorReady(true)
-        // Add a small delay to ensure document import is complete
+        // Add delay to ensure document import is complete
         setTimeout(() => {
           setIsDocumentReady(true)
         }, 500)
       }
     }
 
-    // Check immediately
+    // Check immediately and set up periodic checking
     checkStatus()
-
-    // Set up interval to check periodically
     const interval = setInterval(checkStatus, 100)
 
     return () => clearInterval(interval)
   }, [docUrl])
 
-  // Set editor ready when there's no docUrl
+  /**
+   * Sets editor ready state when no document URL is provided
+   * Handles the case of creating a new document
+   */
   React.useEffect(() => {
     if (!docUrl) {
       setIsEditorReady(true)
     }
   }, [docUrl])
 
-  // Notify when editor is ready
+  /**
+   * Debug logging for editor readiness
+   */
   React.useEffect(() => {
     if (isEditorReady) {
       console.log('Editor is ready and toolbar should be enabled')
     }
   }, [isEditorReady])
 
-  // Memoize the sidebar content to prevent unnecessary re-renders
+  // ============================================================================
+  // MEMOIZED COMPONENTS
+  // ============================================================================
+
+  /**
+   * Memoized sidebar content for placeholder navigation
+   * Only renders when placeholders exist and prevents unnecessary re-renders
+   */
   const sidebarContent = useMemo(() => {
     if (placeholders.length === 0) return null
 
     return (
       <div className="fixed top-0 right-0 w-72 bg-white flex flex-col z-10 h-full pt-24 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.1)]">
+        {/* Sidebar Header */}
         <div className="font-semibold mb-2 p-4 bg-white shadow-sm sticky top-0 z-10">
           Placeholders 
           <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
             {placeholders.length}
           </span>
         </div>
+        
+        {/* Placeholder List */}
         <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
           {placeholders.map((placeholder, index) => (
             <button
@@ -246,13 +343,19 @@ function EditDocumentContent() {
     )
   }, [placeholders, navigateToPlaceholder, formatPlaceholderText])
 
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Fixed Header with Navigation and Actions */}
       <div className="fixed top-0 left-0 w-full z-20">
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Top Navigation Bar */}
             <div className="flex justify-between items-center h-12">
+              {/* Back Navigation */}
               <div className="flex items-center">
                 <Link 
                   href="/"
@@ -262,7 +365,9 @@ function EditDocumentContent() {
                 </Link>
               </div>
               
+              {/* Action Buttons and Status */}
               <div className="flex items-center space-x-4">
+                {/* Save Status Indicators */}
                 {isSaving && (
                   <span className="text-sm text-gray-500">Saving...</span>
                 )}
@@ -276,6 +381,8 @@ function EditDocumentContent() {
                     • Unsaved changes
                   </span>
                 )}
+                
+                {/* Save Button */}
                 <button
                   onClick={handleManualSave}
                   disabled={isManualSaveDisabled || isSaving || !hasUnsavedChanges}
@@ -297,6 +404,8 @@ function EditDocumentContent() {
                     {isSaving ? 'Saving...' : !hasUnsavedChanges ? 'Saved' : 'Save Draft'}
                   </span>
                 </button>
+                
+                {/* Export Button */}
                 <button
                   onClick={handleExport}
                   className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:scale-105 font-medium"
@@ -307,6 +416,8 @@ function EditDocumentContent() {
                 </button>
               </div>
             </div>
+            
+            {/* Editor Toolbar */}
             <TiptapToolbar 
               editor={editorRef.current?.editor || null} 
               isLoading={Boolean(docUrl && !isDocumentReady) || !isEditorReady} 
@@ -315,14 +426,14 @@ function EditDocumentContent() {
         </header>
       </div>
 
-      {/* Fixed Sidebar - Only show when there are placeholders */}
+      {/* Placeholder Navigation Sidebar */}
       {sidebarContent}
 
-      {/* Main Content Area - Scrollable */}
+      {/* Main Content Area */}
       <div className={`pt-28 ${placeholders.length > 0 ? 'pr-72' : ''}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="relative">
-            {/* Always render the editor */}
+            {/* Tiptap Editor Component */}
             <TiptapEditor
               ref={editorRef}
               docUrl={docUrl || undefined}
@@ -336,6 +447,10 @@ function EditDocumentContent() {
   )
 }
 
+/**
+ * Main page component with Suspense boundary
+ * Provides loading state while the main content initializes
+ */
 export default function EditDocumentPage() {
   return (
     <Suspense fallback={<SpinnerLoader />}>
