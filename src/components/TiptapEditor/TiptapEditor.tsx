@@ -584,24 +584,8 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         return found;
     }, [isEmptyPlaceholder]);
 
-    // Ref to store the timeout ID for debounced placeholder detection
+        // Ref to store the timeout ID for cleanup
     const placeholderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    // Debounced placeholder detection to avoid constant re-renders
-    const debouncedPlaceholderDetection = useCallback((editorInstance: any) => {
-        if (!onPlaceholdersChange) return;
-
-        // Clear previous timeout
-        if (placeholderTimeoutRef.current) {
-            clearTimeout(placeholderTimeoutRef.current);
-        }
-
-        // Set new timeout
-        placeholderTimeoutRef.current = setTimeout(() => {
-            onPlaceholdersChange(findPlaceholders(editorInstance));
-            placeholderTimeoutRef.current = null;
-        }, 300); // 300ms debounce
-    }, [onPlaceholdersChange, findPlaceholders]);
 
     const editor = useEditor({
         extensions,
@@ -616,11 +600,11 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             if (onUpdate && typeof onUpdate === 'function') {
                 onUpdate(updatedEditor.getHTML());
             }
-            // Debounced placeholder detection
-            debouncedPlaceholderDetection(updatedEditor);
+            // Note: Placeholder detection is now handled by the parent component
+            // with debounced updates to improve performance
         },
         onCreate: ({ editor: createdEditor }) => {
-            // Buscar placeholders cuando el editor se crea
+            // Detect placeholders when the editor is created
             if (onPlaceholdersChange) {
                 setTimeout(() => {
                     onPlaceholdersChange(findPlaceholders(createdEditor));
@@ -665,8 +649,11 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
                         return;
                     }
                     setEditorContent();
+                    // Detect placeholders after document import
                     if (onPlaceholdersChange) {
-                        onPlaceholdersChange(findPlaceholders(editor));
+                        setTimeout(() => {
+                            onPlaceholdersChange(findPlaceholders(editor));
+                        }, 200);
                     }
                     setError(null);
                 },
@@ -718,6 +705,12 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
                     });
 
                     await importDocxFile(file);
+                    // Detect placeholders after URL import
+                    if (onPlaceholdersChange) {
+                        setTimeout(() => {
+                            onPlaceholdersChange(findPlaceholders(editor));
+                        }, 300);
+                    }
                 } catch (e) {
                     if (e instanceof Error && e.name === 'AbortError') {
                         setError(new Error('File download timed out. Please try uploading the file manually.'));
@@ -734,22 +727,19 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
 
 
 
-    // Efecto adicional para detectar placeholders después de que el editor esté completamente listo
+    // Detect placeholders when editor is ready (for documents without URL)
     useEffect(() => {
-        if (editor && !isLoading && onPlaceholdersChange) {
-            const detectPlaceholders = () => {
+        if (editor && !isLoading && onPlaceholdersChange && !docUrl) {
+            const timeoutId = setTimeout(() => {
                 const placeholders = findPlaceholders(editor);
                 if (placeholders.length > 0) {
                     onPlaceholdersChange(placeholders);
                 }
-            };
-
-            // Detectar placeholders con un pequeño delay
-            const timeoutId = setTimeout(detectPlaceholders, 300);
+            }, 300);
 
             return () => clearTimeout(timeoutId);
         }
-    }, [editor, isLoading, onPlaceholdersChange, findPlaceholders]);
+    }, [editor, isLoading, onPlaceholdersChange, findPlaceholders, docUrl]);
 
     // Cleanup effect to ensure proper destruction
     useEffect(() => {

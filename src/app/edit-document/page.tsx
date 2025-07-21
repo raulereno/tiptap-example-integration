@@ -8,8 +8,8 @@ import TiptapToolbar from '@/components/Toolbar/TiptapToolbar'
 import { saveDraft } from '@/services/cases'
 import { exportToDocx } from '@/utils/exportToDocx'
 import Link from 'next/link'
-import useDebounce from '@/hooks/useDebounce'
-import { Download } from '@mui/icons-material'
+import { useEditorDebounce } from '@/hooks/useDebounce'
+import { Download, Save } from '@mui/icons-material'
 
 export default function EditDocumentPage() {
   const searchParams = useSearchParams()
@@ -21,6 +21,7 @@ export default function EditDocumentPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [isDocumentReady, setIsDocumentReady] = useState(false)
   const [isEditorReady, setIsEditorReady] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   // Function to format placeholder text
   const formatPlaceholderText = useCallback((placeholderText: string): string => {
@@ -35,48 +36,117 @@ export default function EditDocumentPage() {
     return text
   }, [])
 
-  // Debounced save function
-  const debouncedSave = useDebounce(async (html: string) => {
+  // Save function
+  const handleSave = useCallback(async (html: string) => {
     if (!html || typeof html !== 'string' || !html.trim()) return
     
     setIsSaving(true)
     try {
       await saveDraft(html)
       setLastSaved(new Date())
+      setHasUnsavedChanges(false)
     } catch (error) {
       console.error('Failed to save draft:', error)
     } finally {
       setIsSaving(false)
     }
-  }, 6000) // Save every 6 seconds
+  }, [])
 
-  // Handle editor updates
-  const handleEditorUpdate = useCallback((html: string) => {
-    debouncedSave(html)
-  }, [debouncedSave])
-
-  // Handle placeholder detection
-  const handlePlaceholders = useCallback((list: PlaceholderPos[]) => {
-    
-    // Only update if placeholders actually changed
-    setPlaceholders(prevPlaceholders => {
-      // If length is different, definitely changed
-      if (prevPlaceholders.length !== list.length) {
-        return list
-      }
+  // Placeholder detection function
+  const handlePlaceholderUpdate = useCallback(() => {
+    if (editorRef.current?.editor) {
+      // Get placeholders from the current editor state
+      const editorInstance = editorRef.current.editor
       
-      // Check if any placeholder text or position changed
-      const hasChanged = list.some((newPlaceholder, index) => {
-        const prevPlaceholder = prevPlaceholders[index]
-        return !prevPlaceholder || 
-               newPlaceholder.text !== prevPlaceholder.text ||
-               newPlaceholder.from !== prevPlaceholder.from ||
-               newPlaceholder.to !== prevPlaceholder.to
+      // Use the same placeholder detection logic that's in TiptapEditor
+      const placeholderRegex = /{{.*?}}|\[.*?\]/g
+      const found: PlaceholderPos[] = []
+
+      editorInstance.state.doc.descendants((node: { isText: boolean; text?: string }, pos: number) => {
+        if (!node.isText) return
+
+        const text = node.text || ''
+        let match
+        const regex = new RegExp(placeholderRegex.source, 'g')
+        
+        while ((match = regex.exec(text)) !== null) {
+          const rawText = match[0]
+
+          // Skip empty placeholders for the navigation list
+          if (rawText === '[]' || rawText === '{}' || rawText === '{{}}') {
+            continue
+          }
+
+          let label = rawText
+
+          if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
+            const parts = rawText.slice(2, -2).split('|')
+            if (parts.length > 1) {
+              const potentialLabel = parts[parts.length - 2]
+              if (potentialLabel) {
+                label = potentialLabel.trim()
+              }
+            }
+          } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
+            label = rawText.slice(1, -1).trim()
+          }
+
+          found.push({
+            text: rawText,
+            label: label,
+            from: pos + match.index,
+            to: pos + match.index + rawText.length,
+          })
+        }
       })
-      
-      // Only return new array if something actually changed
-      return hasChanged ? list : prevPlaceholders
-    })
+
+      // Update placeholders only if they've changed
+      setPlaceholders(prevPlaceholders => {
+        if (prevPlaceholders.length !== found.length) {
+          return found
+        }
+        
+        const hasChanged = found.some((newPlaceholder, index) => {
+          const prevPlaceholder = prevPlaceholders[index]
+          return !prevPlaceholder || 
+                 newPlaceholder.text !== prevPlaceholder.text ||
+                 newPlaceholder.from !== prevPlaceholder.from ||
+                 newPlaceholder.to !== prevPlaceholder.to
+        })
+        
+        return hasChanged ? found : prevPlaceholders
+      })
+    }
+  }, [])
+
+  // Enhanced debounced editor update with 5-second delay
+  const { debouncedUpdate, manualSave, isManualSaveDisabled } = useEditorDebounce(
+    handleSave,
+    handlePlaceholderUpdate,
+    5000 // 5 seconds
+  )
+
+  // Handle editor updates - only trigger debounced operations
+  const handleEditorUpdate = useCallback((html: string) => {
+    setHasUnsavedChanges(true)
+    debouncedUpdate(html)
+  }, [debouncedUpdate])
+
+  // Handle manual save
+  const handleManualSave = useCallback(async () => {
+    if (!editorRef.current) return
+    
+    const html = editorRef.current.getContent()
+    if (html && !isManualSaveDisabled) {
+      await manualSave(html)
+    }
+  }, [manualSave, isManualSaveDisabled])
+
+  // Handle placeholder detection from editor (for initial load only)
+  const handlePlaceholders = useCallback((list: PlaceholderPos[]) => {
+    // Only use this for initial placeholder detection when document loads
+    // During editing, placeholder detection will be handled by the debounced update
+    setPlaceholders(list)
   }, [])
 
   // Navigate to placeholder
@@ -200,6 +270,32 @@ export default function EditDocumentPage() {
                     Last saved: {lastSaved.toLocaleTimeString()}
                   </span>
                 )}
+                {hasUnsavedChanges && !isSaving && (
+                  <span className="text-sm text-orange-600 font-medium">
+                    • Unsaved changes
+                  </span>
+                )}
+                <button
+                  onClick={handleManualSave}
+                  disabled={isManualSaveDisabled || isSaving || !hasUnsavedChanges}
+                  className={`px-3 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:scale-105 font-medium ${
+                    isManualSaveDisabled || isSaving || !hasUnsavedChanges
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800'
+                  }`}
+                  title={
+                    isSaving 
+                      ? "Saving..." 
+                      : !hasUnsavedChanges 
+                        ? "No changes to save" 
+                        : "Save Draft"
+                  }
+                >
+                  <Save sx={{ fontSize: 16 }} />
+                  <span className="text-sm">
+                    {isSaving ? 'Saving...' : !hasUnsavedChanges ? 'Saved' : 'Save Draft'}
+                  </span>
+                </button>
                 <button
                   onClick={handleExport}
                   className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 py-2 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 shadow-md hover:shadow-lg transform hover:scale-105 font-medium"
