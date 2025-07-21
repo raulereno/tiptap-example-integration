@@ -119,17 +119,17 @@ export default function EditDocumentPage() {
         </header>
       </div>
 
-      {/* Fixed Sidebar */}
-      <div className="fixed top-0 right-0 w-72 bg-white border-l flex flex-col z-10 h-full pt-24">
-        <div className="font-semibold mb-2 p-4 bg-white border-b sticky top-0 z-10">
-          Placeholders 
-          <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
-            {placeholders.length}
-          </span>
-        </div>
-        <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
-          {placeholders.length > 0 ? (
-            placeholders.map((placeholder, index) => (
+      {/* Fixed Sidebar - Only show when there are placeholders */}
+      {placeholders.length > 0 && (
+        <div className="fixed top-0 right-0 w-72 bg-white border-l flex flex-col z-10 h-full pt-24">
+          <div className="font-semibold mb-2 p-4 bg-white border-b sticky top-0 z-10">
+            Placeholders 
+            <span className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+              {placeholders.length}
+            </span>
+          </div>
+          <div className="flex flex-col gap-2 p-4 overflow-y-auto flex-1">
+            {placeholders.map((placeholder, index) => (
               <button
                 key={`${placeholder.from}-${index}`}
                 className="text-left px-3 py-2 rounded border border-gray-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors"
@@ -143,17 +143,13 @@ export default function EditDocumentPage() {
                   {placeholder.text}
                 </div>
               </button>
-            ))
-          ) : (
-            <div className="text-sm text-gray-500 text-center py-4">
-              No placeholders found in the document
-            </div>
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content Area - Scrollable */}
-      <div className="pr-72 pt-28">
+      <div className={`pt-28 ${placeholders.length > 0 ? 'pr-72' : ''}`}>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div>
             <TiptapEditor
