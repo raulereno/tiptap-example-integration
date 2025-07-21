@@ -1,26 +1,550 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+body {
+  margin: 0;
+  padding: 0;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Basic editor styles */
+.tiptap {
+  font-family: Arial, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.tiptap > * + * {
+  margin-top: 0.75em;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding: 0 1rem;
+}
+
+.tiptap h1,
+.tiptap h2,
+.tiptap h3,
+.tiptap h4,
+.tiptap h5,
+.tiptap h6 {
+  line-height: 1.1;
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.tiptap h1 {
+  font-size: 2.25em; /* 36px */
+  color: black;
+}
+
+.tiptap h2 {
+  font-size: 1.875em; /* 30px */
+  color: black;
+}
+
+.tiptap h3 {
+  font-size: 1.5em; /* 24px */
+  color: black;
+}
+
+.tiptap h4 {
+  font-size: 1.25em; /* 20px */
+  color: black;
+}
+
+.tiptap h5 {
+  font-size: 1.125em; /* 18px */
+  color: black;
+}
+
+.tiptap h6 {
+  font-size: 1em; /* 16px */
+  color: black;
+  font-weight: 500;
+}
+
+.tiptap code {
+  background-color: rgba(97, 97, 97, 0.1);
+  color: #616161;
+}
+
+.tiptap pre {
+  background: #0d0d0d;
+  color: #fff;
+  font-family: 'JetBrainsMono', monospace;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.tiptap pre code {
+  color: inherit;
+  padding: 0;
+  background: none;
+  font-size: 0.8rem;
+}
+
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+
+.tiptap blockquote {
+  padding-left: 1rem;
+  border-left: 2px solid rgba(13, 13, 13, 0.1);
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 2px solid rgba(13, 13, 13, 0.1);
+  margin: 2rem 0;
+}
+
+.tiptap-editor-container{
+  position: relative;
+}
+
+/* Modern Toolbar Styling */
+.modern-toolbar {
+  border: none;
+  margin: 0;
+  width: 100%;
+  
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  min-width: max-content;
+  flex-wrap: nowrap;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: linear-gradient(to bottom, transparent, #e2e8f0, transparent);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* Icon Button Styling */
+.toolbar-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  color: #475569;
+  position: relative;
+  overflow: hidden;
+}
+
+.toolbar-icon-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #2563eb;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: 8px;
+  z-index: -1;
+}
+
+.toolbar-icon-btn:hover {
+  color: #1e293b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.toolbar-icon-btn:hover::before {
+  opacity: 0.1;
+}
+
+.toolbar-icon-btn:active {
+  transform: translateY(0);
+  transition: transform 0.1s ease;
+}
+
+.toolbar-icon-btn.active {
+  background: #2563eb;
+  color: white;
+  box-shadow: 
+    0 2px 8px rgba(37, 99, 235, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-icon-btn.active::before {
+  opacity: 0;
+}
+
+.toolbar-icon-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.toolbar-icon-btn.disabled::before {
+  opacity: 0 !important;
+}
+
+/* Select Styling */
+.format-select,
+.font-select,
+.size-select {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+
+.format-select {
+  min-width: 100px;
+}
+
+.font-select {
+  min-width: 90px;
+}
+
+.size-select {
+  min-width: 60px;
+}
+
+.format-select:hover,
+.font-select:hover,
+.size-select:hover {
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+  transform: translateY(-1px);
+}
+
+.format-select:focus,
+.font-select:focus,
+.size-select:focus {
+  border-color: #2563eb;
+  box-shadow: 
+    0 4px 12px rgba(37, 99, 235, 0.25),
+    0 0 0 3px rgba(37, 99, 235, 0.1);
+  transform: translateY(-1px);
+}
+
+.format-select {
+  min-width: 140px;
+  font-weight: 600;
+}
+
+.font-select {
+  min-width: 130px;
+}
+
+.size-select {
+  min-width: 80px;
+}
+
+/* Color Picker Styling */
+.color-picker-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.color-btn {
+  position: relative;
+  overflow: visible !important;
+}
+
+.color-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* Status Indicators */
+.toolbar-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #667eea;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.error-indicator {
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
+
+/* Clear Formatting Button Special Styling */
+.clear-formatting {
+  color: #ef4444 !important;
+}
+
+.clear-formatting:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #dc2626 !important;
+}
+
+.clear-formatting.active {
+  background: #ef4444 !important;
+  color: white !important;
+}
+
+/* Legacy Toolbar Styles (hidden by default) */
+.tiptap-toolbar {
+  display: none;
+}
+
+/* When editor is used without internal toolbar */
+.tiptap-editor-container.no-toolbar .ProseMirror {
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  font-family: Arial, sans-serif;
+}
+
+.tiptap-editor-container .control-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 8px;
+  border-bottom: 1px solid #ddd;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 20;
+}
+
+.tiptap-editor-container .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tiptap-editor-container .button-group button {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tiptap-editor-container .button-group button:hover {
+  background-color: #f0f0f0;
+}
+
+.tiptap-editor-container .button-group button.is-active {
+  background-color: #e0e0e0;
+  border-color: #bbb;
+}
+  
+.tiptap-editor-container .ProseMirror {
+  min-height: 400px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 0 0 4px 4px;
+  background: white;
+  font-family: Arial, sans-serif;
+}
+
+.tiptap-editor-container .ProseMirror:focus {
+  outline: none;
+  border-color: black;
+}
+
+.tiptap-editor-container .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+.tiptap-editor-container table {
+  border-collapse: collapse;
+  margin: 0;
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tiptap-editor-container table td,
+.tiptap-editor-container table th {
+  border: 2px solid #ced4da;
+  box-sizing: border-box;
+  min-width: 1em;
+  padding: 3px 5px;
+  position: relative;
+  vertical-align: top;
+}
+
+.tiptap-editor-container table td > *,
+.tiptap-editor-container table th > * {
+  margin-bottom: 0;
+}
+
+.tiptap-editor-container table th {
+  background-color: #f1f3f5;
+  font-weight: bold;
+  text-align: left;
+}
+
+.tiptap-editor-container .hint.error {
+  color: #f44336;
+}
+
+.variable-highlight {
+  background-color: #fef08a;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 600;
+  color: #713f12;
+  white-space: pre-wrap;
+}
+
+.tiptap-editor-container .placeholder-select {
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+  max-width: 200px;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .toolbar-section {
+    padding: 6px 10px;
+    gap: 1px;
+  }
+  
+  .toolbar-group {
+    gap: 0px;
+  }
+  
+  .toolbar-divider {
+    margin: 0 4px;
+    height: 16px;
+  }
+  
+  .toolbar-icon-btn {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 4px;
+  }
+  
+  .format-select {
+    min-width: 85px;
+    font-size: 11px;
+  }
+  
+  .font-select {
+    min-width: 75px;
+    font-size: 11px;
+  }
+  
+  .size-select {
+    min-width: 50px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbar-section {
+    padding: 4px 8px;
+    gap: 1px;
+  }
+  
+  .toolbar-divider {
+    display: none;
+  }
+  
+  .toolbar-icon-btn {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 3px;
+  }
+  
+  .format-select {
+    min-width: 70px;
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  
+  .font-select {
+    min-width: 60px;
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+  
+  .size-select {
+    min-width: 40px;
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+} 
