@@ -500,14 +500,15 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         if (!editorInstance) return [];
         const placeholderRegex = /{{.*?}}|\[.*?\]/g;
         const found: PlaceholderPos[] = [];
-        const uniquePlaceholders = new Set();
 
         editorInstance.state.doc.descendants((node: any, pos: number) => {
             if (!node.isText) return;
 
             const text = node.text || '';
             let match;
-            while ((match = placeholderRegex.exec(text)) !== null) {
+            const regex = new RegExp(placeholderRegex.source, 'g'); // Create new regex instance for each text node
+            
+            while ((match = regex.exec(text)) !== null) {
                 const rawText = match[0];
 
                 // Skip empty placeholders for the navigation list
@@ -515,31 +516,32 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
                     continue;
                 }
 
-                if (!uniquePlaceholders.has(rawText)) {
-                    let label = rawText;
+                let label = rawText;
 
-                    if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
-                        const parts = rawText.slice(2, -2).split('|');
-                        if (parts.length > 1) {
-                            const potentialLabel = parts[parts.length - 2];
-                            if (potentialLabel) {
-                                label = potentialLabel.trim();
-                            }
+                if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
+                    const parts = rawText.slice(2, -2).split('|');
+                    if (parts.length > 1) {
+                        const potentialLabel = parts[parts.length - 2];
+                        if (potentialLabel) {
+                            label = potentialLabel.trim();
                         }
-                    } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
-                        label = rawText.slice(1, -1).trim();
                     }
-
-                    found.push({
-                        text: rawText,
-                        label: label,
-                        from: pos + match.index,
-                        to: pos + match.index + rawText.length,
-                    });
-                    uniquePlaceholders.add(rawText);
+                } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
+                    label = rawText.slice(1, -1).trim();
                 }
+
+                found.push({
+                    text: rawText,
+                    label: label,
+                    from: pos + match.index,
+                    to: pos + match.index + rawText.length,
+                });
             }
         });
+        
+        // Debug log to see how many placeholders were found
+        console.log(`Found ${found.length} placeholders:`, found.map(p => p.text));
+        
         return found;
     }, [isEmptyPlaceholder]);
 
