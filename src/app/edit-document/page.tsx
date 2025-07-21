@@ -20,6 +20,7 @@ export default function EditDocumentPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [isDocumentReady, setIsDocumentReady] = useState(false)
+  const [isEditorReady, setIsEditorReady] = useState(false)
 
   // Function to format placeholder text
   const formatPlaceholderText = useCallback((placeholderText: string): string => {
@@ -99,7 +100,7 @@ export default function EditDocumentPage() {
     }
   }, [])
 
-  // Monitor document import status
+  // Monitor editor and document status
   React.useEffect(() => {
     if (!docUrl) {
       // If no docUrl, document is ready immediately
@@ -107,21 +108,40 @@ export default function EditDocumentPage() {
       return
     }
 
-    // If there's a docUrl, wait for the editor to be ready and not loading
-    const checkDocumentStatus = () => {
-      if (editorRef.current?.isReady && !editorRef.current?.isLoading) {
-        setIsDocumentReady(true)
+    // Check both editor readiness and loading status
+    const checkStatus = () => {
+      const editor = editorRef.current
+      if (editor?.isReady && !editor?.isLoading) {
+        setIsEditorReady(true)
+        // Add a small delay to ensure document import is complete
+        setTimeout(() => {
+          setIsDocumentReady(true)
+        }, 500)
       }
     }
 
     // Check immediately
-    checkDocumentStatus()
+    checkStatus()
 
-    // Set up interval to check status
-    const interval = setInterval(checkDocumentStatus, 100)
+    // Set up interval to check periodically
+    const interval = setInterval(checkStatus, 100)
 
     return () => clearInterval(interval)
   }, [docUrl])
+
+  // Set editor ready when there's no docUrl
+  React.useEffect(() => {
+    if (!docUrl) {
+      setIsEditorReady(true)
+    }
+  }, [docUrl])
+
+  // Notify when editor is ready
+  React.useEffect(() => {
+    if (isEditorReady) {
+      console.log('Editor is ready and toolbar should be enabled')
+    }
+  }, [isEditorReady])
 
   // Memoize the sidebar content to prevent unnecessary re-renders
   const sidebarContent = useMemo(() => {
@@ -193,7 +213,7 @@ export default function EditDocumentPage() {
             </div>
             <TiptapToolbar 
               editor={editorRef.current?.editor || null} 
-              isLoading={Boolean(docUrl && !isDocumentReady)} 
+              isLoading={Boolean(docUrl && !isDocumentReady) || !isEditorReady} 
             />
           </div>
         </header>
