@@ -48,8 +48,8 @@ export function useDocumentStorage() {
   const [documentUrl, setDocumentUrl] = useLocalStorage<string | null>('tiptap_document_url', null)
   const [documentFilename, setDocumentFilename] = useLocalStorage<string | null>('tiptap_document_filename', null)
 
-  const saveDocument = (url: string, filename?: string) => {
-    setDocumentUrl(url)
+  const saveDocument = (urlOrData: string, filename?: string) => {
+    setDocumentUrl(urlOrData)
     if (filename) {
       setDocumentFilename(filename)
     } else {
@@ -62,9 +62,13 @@ export function useDocumentStorage() {
     setDocumentFilename(null)
   }
 
+  // Helper to check if the stored data is a base64 file
+  const isBase64File = documentUrl?.startsWith('data:')
+
   return {
     documentUrl,
     documentFilename,
+    isBase64File,
     saveDocument,
     clearDocument
   }

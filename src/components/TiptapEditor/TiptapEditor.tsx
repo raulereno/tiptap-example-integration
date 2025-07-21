@@ -63,6 +63,8 @@ export interface TiptapEditorProps {
     onUpdate: (html: string) => void;
     /** Optional URL to load a DOCX document from */
     docUrl?: string;
+    /** Optional filename for the document (useful for blob URLs) */
+    filename?: string;
     /** Callback function to receive detected placeholders */
     onPlaceholders: (placeholders: PlaceholderPos[]) => void;
 }
@@ -162,7 +164,7 @@ const FontSize = Extension.create({
 const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { 
     tiptapToken: string | null; 
     onPlaceholdersChange: (placeholders: PlaceholderPos[]) => void 
-}>(({ onUpdate, docUrl, tiptapToken, onPlaceholdersChange }, ref) => {
+}>(({ onUpdate, docUrl, filename, tiptapToken, onPlaceholdersChange }, ref) => {
     
     // ============================================================================
     // STATE MANAGEMENT
@@ -415,6 +417,12 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & {
      * @param file - The DOCX file to import
      */
     const importDocxFile = useCallback(async (file: File) => {
+        console.log('TiptapEditor: importDocxFile called with:', {
+            fileName: file?.name,
+            fileSize: file?.size,
+            hasEditor: !!editor
+        });
+        
         if (!file || !editor) return;
 
         setIsLoading(true);
@@ -469,7 +477,23 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & {
      * Automatically imports documents from provided docUrl
      */
     useEffect(() => {
-        if (docUrl && docUrl.toLowerCase().endsWith('.docx') && editor && tiptapToken && !hasImportedDocx) {
+        // Check if it's a DOCX file (either ends with .docx or is base64 data)
+        const isDocxFile = docUrl && (
+            docUrl.toLowerCase().endsWith('.docx') || 
+            docUrl.startsWith('data:')
+        );
+        
+        console.log('TiptapEditor: Checking document import', {
+            docUrl: docUrl ? `${docUrl.substring(0, 50)}...` : null,
+            filename,
+            isDocxFile,
+            isBase64Data: docUrl?.startsWith('data:'),
+            hasEditor: !!editor,
+            hasToken: !!tiptapToken,
+            hasImported: hasImportedDocx
+        });
+        
+        if (isDocxFile && editor && tiptapToken && !hasImportedDocx) {
             const importFromUrl = async () => {
                 setIsLoading(true);
                 setError(null);
@@ -486,23 +510,76 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & {
                 }
 
                 try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                    console.log('TiptapEditor: Starting document import from URL:', docUrl);
+                    
+                    let file: File;
+                    
+                    if (docUrl.startsWith('data:')) {
+                        // For base64 data URLs, convert to file
+                        console.log('TiptapEditor: Handling base64 data URL');
+                        
+                        try {
+                            // Convert base64 data URL to blob
+                            const response = await fetch(docUrl);
+                            const blob = await response.blob();
+                            
+                            console.log('TiptapEditor: Base64 converted to blob:', {
+                                size: blob.size,
+                                type: blob.type
+                            });
+                            
+                            // Use filename from props or default
+                            const finalFilename = filename || 'uploaded-document.docx';
+                            
+                            file = new File([blob], finalFilename, {
+                                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            });
+                            
+                            console.log('TiptapEditor: Created file from base64:', {
+                                filename: finalFilename,
+                                size: file.size,
+                                type: file.type
+                            });
+                        } catch (base64Error) {
+                            console.error('TiptapEditor: Error converting base64:', base64Error);
+                            throw new Error(`Failed to convert base64 data: ${base64Error.message}`);
+                        }
+                    } else {
+                        // For regular URLs, use the original fetch logic
+                        console.log('TiptapEditor: Handling regular URL');
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-                    const res = await fetch(docUrl, {
-                        signal: controller.signal,
-                    });
+                        const res = await fetch(docUrl, {
+                            signal: controller.signal,
+                        });
 
-                    clearTimeout(timeoutId);
+                        clearTimeout(timeoutId);
 
-                    if (!res.ok) {
-                        throw new Error(`Failed to fetch docx file: ${res.status} ${res.statusText}`);
+                        if (!res.ok) {
+                            throw new Error(`Failed to fetch docx file: ${res.status} ${res.statusText}`);
+                        }
+
+                        const blob = await res.blob();
+                        
+                        // Get filename from props, URL, or use default
+                        let finalFilename = 'document.docx';
+                        if (filename) {
+                            finalFilename = filename;
+                        } else {
+                            finalFilename = docUrl.split('/').pop() || 'document.docx';
+                        }
+                        
+                        file = new File([blob], finalFilename, {
+                            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        });
+
+                        console.log('TiptapEditor: Created file from URL:', {
+                            filename: finalFilename,
+                            size: file.size,
+                            type: file.type
+                        });
                     }
-
-                    const blob = await res.blob();
-                    const file = new File([blob], docUrl.split('/').pop() || 'document.docx', {
-                        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    });
 
                     await importDocxFile(file);
                     // Detect placeholders after URL import
@@ -601,7 +678,7 @@ TiptapEditorCore.displayName = 'TiptapEditorCore';
  * Main Tiptap editor component with token management
  * Handles Tiptap Pro token fetching and provides fallback functionality
  */
-const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate, docUrl, onPlaceholders }, ref) => {
+const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate, docUrl, filename, onPlaceholders }, ref) => {
     
     // ============================================================================
     // STATE MANAGEMENT
@@ -709,6 +786,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
                     ref={editorCoreRef}
                     onUpdate={onUpdate}
                     docUrl={undefined}
+                    filename={undefined}
                     tiptapToken={null}
                     onPlaceholdersChange={onPlaceholders}
                     onPlaceholders={onPlaceholders}
@@ -725,6 +803,7 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
             ref={editorCoreRef}
             onUpdate={onUpdate}
             docUrl={tiptapToken ? docUrl : undefined}
+            filename={tiptapToken ? filename : undefined}
             tiptapToken={tiptapToken}
             onPlaceholdersChange={onPlaceholders}
             onPlaceholders={onPlaceholders}

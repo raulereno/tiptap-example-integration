@@ -23,9 +23,9 @@ A minimal, fully-commented example showing how to use Tiptap 3 with DOCX import/
   - Rich text formatting toolbar
 
 - **Memory Management**:
-  - Automatic cleanup of blob URLs
-  - Efficient localStorage handling
+  - Efficient localStorage handling with base64 encoding
   - Proper component lifecycle management
+  - No memory leaks from blob URLs
 
 ## 🚀 Getting Started
 
@@ -90,10 +90,7 @@ src/
 - Type-safe document storage
 - Automatic cleanup and error handling
 
-### Blob Utils (`src/utils/blobUtils.ts`)
-- Efficient blob URL management
-- Memory leak prevention
-- Cleanup utilities
+
 
 ## 🎯 Usage Examples
 
@@ -107,9 +104,15 @@ router.push('/edit-document')
 ### Uploading a Local File
 ```typescript
 const handleFileUpload = (file: File) => {
-  const blobUrl = URL.createObjectURL(file)
-  saveDocument(blobUrl, file.name)
-  router.push('/edit-document')
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const base64 = e.target?.result as string
+    if (base64) {
+      saveDocument(base64, file.name)
+      router.push('/edit-document')
+    }
+  }
+  reader.readAsDataURL(file)
 }
 ```
 
@@ -128,9 +131,10 @@ The application uses the following localStorage keys:
 
 ## 🧹 Memory Management
 
-- Blob URLs are automatically cleaned up when components unmount
+- Files are converted to base64 and stored in localStorage
 - localStorage is cleared when navigating back to home
 - Efficient state management prevents memory leaks
+- No blob URL cleanup needed
 
 ## 🎨 Styling
 
@@ -145,7 +149,7 @@ The application uses the following localStorage keys:
 - TypeScript for type safety
 - Tiptap 3 with Pro extensions
 - LocalStorage for state persistence
-- Blob URLs for local file handling
+- Base64 encoding for local file handling
 
 ## 🤝 Contributing
 

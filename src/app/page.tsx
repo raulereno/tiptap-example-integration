@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Description, 
@@ -10,23 +10,14 @@ import {
   Upload as UploadIcon
 } from '@mui/icons-material'
 import { useDocumentStorage } from '@/hooks/useLocalStorage'
-import { revokeBlobUrl } from '@/utils/blobUtils'
 
 export default function Home() {
   const [docUrl, setDocUrl] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { saveDocument } = useDocumentStorage()
-
-  // Cleanup blob URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      revokeBlobUrl(blobUrl)
-    }
-  }, [blobUrl])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,20 +40,27 @@ export default function Home() {
     const file = e.target.files?.[0]
     if (file) {
       setSelectedFile(file)
-      // Clean up previous blob URL if it exists
-      revokeBlobUrl(blobUrl)
-      setBlobUrl(null)
     }
   }
 
   const handleFileUpload = () => {
     if (selectedFile) {
       setIsLoading(true)
-      // Create a blob URL for the selected file
-      const newBlobUrl = URL.createObjectURL(selectedFile)
-      setBlobUrl(newBlobUrl)
-      saveDocument(newBlobUrl, selectedFile.name)
-      router.push('/edit-document')
+      
+      // Convert file to base64
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string
+        if (base64) {
+          saveDocument(base64, selectedFile.name)
+          router.push('/edit-document')
+        }
+      }
+      reader.onerror = () => {
+        console.error('Error reading file')
+        setIsLoading(false)
+      }
+      reader.readAsDataURL(selectedFile)
     }
   }
 

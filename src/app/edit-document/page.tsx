@@ -468,6 +468,7 @@ function EditDocumentContent() {
             <TiptapEditor
               ref={editorRef}
               docUrl={docUrl || undefined}
+              filename={filename || undefined}
               onUpdate={handleEditorUpdate}
               onPlaceholders={handlePlaceholders}
             />
