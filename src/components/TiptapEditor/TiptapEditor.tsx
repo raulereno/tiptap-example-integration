@@ -1,31 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
+
 import React, { forwardRef, useImperativeHandle, useCallback, useRef, useState, useEffect, useMemo } from 'react';
-
-// TypeScript interfaces
-export interface TiptapEditorProps {
-    onUpdate: (html: string) => void;
-    docUrl?: string;
-    onPlaceholders: (placeholders: PlaceholderPos[]) => void;
-}
-
-export interface TiptapEditorRef {
-    getContent: () => string;
-    setContent: (content: string) => void;
-    importDocx: (file: File) => Promise<void>;
-    navigateToPlaceholder: (placeholder: PlaceholderPos) => void;
-    isReady: boolean;
-    isLoading: boolean;
-    editor: Editor | null;
-}
-
-export interface PlaceholderPos {
-    text: string;
-    label: string;
-    from: number;
-    to: number;
-}
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
+
+// Tiptap Extensions
 import StarterKit from '@tiptap/starter-kit';
 import Color from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
@@ -41,7 +20,8 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import Underline from '@tiptap/extension-underline';
 import { Extension } from '@tiptap/core';
 import ImportDocx from '@tiptap-pro/extension-import-docx';
-import { VariableHighlightExtension } from './VariableHighlightExtension';
+
+// Material-UI Icons
 import {
     FormatBold,
     FormatItalic,
@@ -62,17 +42,76 @@ import {
     Undo,
     Redo,
     FormatColorText,
-
     HorizontalRule as HorizontalRuleIcon,
     ClearAll,
 } from '@mui/icons-material';
 
-import './styles.css';
+// Local imports
+import { VariableHighlightExtension } from './VariableHighlightExtension';
 import SpinnerLoader from '../Common/SpinnerLoader';
+import './styles.css';
 
-// Custom FontSize extension
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Props interface for the TiptapEditor component
+ */
+export interface TiptapEditorProps {
+    /** Callback function triggered when editor content changes */
+    onUpdate: (html: string) => void;
+    /** Optional URL to load a DOCX document from */
+    docUrl?: string;
+    /** Callback function to receive detected placeholders */
+    onPlaceholders: (placeholders: PlaceholderPos[]) => void;
+}
+
+/**
+ * Ref interface exposing editor methods and state
+ */
+export interface TiptapEditorRef {
+    /** Get current editor content as HTML string */
+    getContent: () => string;
+    /** Set editor content from HTML string */
+    setContent: (content: string) => void;
+    /** Import DOCX file into the editor */
+    importDocx: (file: File) => Promise<void>;
+    /** Navigate editor cursor to a specific placeholder */
+    navigateToPlaceholder: (placeholder: PlaceholderPos) => void;
+    /** Whether the editor is ready for use */
+    isReady: boolean;
+    /** Whether the editor is currently loading content */
+    isLoading: boolean;
+    /** Direct access to the Tiptap editor instance */
+    editor: Editor | null;
+}
+
+/**
+ * Interface representing a placeholder position in the document
+ */
+export interface PlaceholderPos {
+    /** The raw placeholder text as it appears in the document */
+    text: string;
+    /** Human-readable label for the placeholder */
+    label: string;
+    /** Start position of the placeholder in the document */
+    from: number;
+    /** End position of the placeholder in the document */
+    to: number;
+}
+
+// ============================================================================
+// CUSTOM EXTENSIONS
+// ============================================================================
+
+/**
+ * Custom FontSize extension for Tiptap
+ * Allows setting and managing font sizes in the editor
+ */
 const FontSize = Extension.create({
     name: 'fontSize',
+    
     addGlobalAttributes() {
         return [
             {
@@ -94,6 +133,7 @@ const FontSize = Extension.create({
             },
         ];
     },
+    
     addCommands() {
         return {
             setFontSize: (fontSize: string) => ({ chain }: { chain: any }) => {
@@ -111,329 +151,125 @@ const FontSize = Extension.create({
     },
 });
 
-// Export the Toolbar component separately
-export const TiptapToolbar = ({ editor, isLoading }: { editor: Editor | null; isLoading: boolean }) => {
-    // Solo deshabilitar si realmente está cargando, no por falta de editor
-    const isDisabled = isLoading;
+// ============================================================================
+// CORE EDITOR COMPONENT
+// ============================================================================
 
-    const formatOptions = [
-        { label: 'Normal Text', value: 'paragraph', action: () => editor?.chain().focus().setParagraph().run(), isActive: () => editor?.isActive('paragraph') || false },
-        { label: 'Heading 1', value: 'h1', action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), isActive: () => editor?.isActive('heading', { level: 1 }) || false },
-        { label: 'Heading 2', value: 'h2', action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), isActive: () => editor?.isActive('heading', { level: 2 }) || false },
-        { label: 'Heading 3', value: 'h3', action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(), isActive: () => editor?.isActive('heading', { level: 3 }) || false },
-        { label: 'Heading 4', value: 'h4', action: () => editor?.chain().focus().toggleHeading({ level: 4 }).run(), isActive: () => editor?.isActive('heading', { level: 4 }) || false },
-    ];
-
-    const getCurrentFormat = () => {
-        if (!editor) return 'Normal Text';
-        const activeFormat = formatOptions.find(option => option.isActive());
-        return activeFormat ? activeFormat.label : 'Normal Text';
-    };
-
-    const fontSizes = ['8px', '9px', '10px', '11px', '12px', '14px', '16px', '18px', '24px', '30px', '36px', '48px', '60px', '72px'];
-
-    return (
-        <div className="modern-toolbar">
-            <div className="toolbar-section">
-                {/* Undo/Redo */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Undo (Ctrl+Z)"
-                        onClick={() => editor?.chain().focus().undo().run()}
-                        disabled={isDisabled || !editor?.can().undo()}
-                        className={`toolbar-icon-btn ${isDisabled || !editor?.can().undo() ? 'disabled' : ''}`}
-                    >
-                        <Undo sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Redo (Ctrl+Y)"
-                        onClick={() => editor?.chain().focus().redo().run()}
-                        disabled={isDisabled || !editor?.can().redo()}
-                        className={`toolbar-icon-btn ${isDisabled || !editor?.can().redo() ? 'disabled' : ''}`}
-                    >
-                        <Redo sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Format and Font */}
-                <div className="toolbar-group">
-                    <select
-                        className="format-select"
-                        value={getCurrentFormat()}
-                        onChange={(e) => {
-                            if (editor) {
-                                const selectedOption = formatOptions.find(option => option.label === e.target.value);
-                                if (selectedOption) {
-                                    selectedOption.action();
-                                }
-                            }
-                        }}
-                        disabled={!editor || isDisabled}
-                    >
-                        {formatOptions.map(option => (
-                            <option key={option.value} value={option.label}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-
-
-
-                    <select
-                        className="size-select"
-                        onChange={(e) => {
-                            if (editor && e.target.value) {
-                                (editor.chain().focus() as any).setFontFamily(e.target.value).run();
-                            }
-                        }}
-                        defaultValue=""
-                        disabled={!editor || isDisabled}
-                    >
-                        <option value="">Size</option>
-                        {fontSizes.map(size => (
-                            <option key={size} value={size}>
-                                {size}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Text Formatting */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Bold (Ctrl+B)"
-                        onClick={() => editor?.chain().focus().toggleBold().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('bold') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatBold sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Italic (Ctrl+I)"
-                        onClick={() => editor?.chain().focus().toggleItalic().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('italic') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatItalic sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Underline (Ctrl+U)"
-                        onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('underline') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatUnderlined sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Strikethrough"
-                        onClick={() => editor?.chain().focus().toggleStrike().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('strike') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatStrikethrough sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Text Color and Highlight */}
-                <div className="toolbar-group">
-                    <div className="color-picker-group">
-                        <button
-                            type="button"
-                            title="Text Color"
-                            className={`toolbar-icon-btn color-btn ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                            disabled={!editor || isDisabled}
-                        >
-                            <FormatColorText sx={{ fontSize: 18 }} />
-                            <input
-                                type="color"
-                                onChange={(e) => editor?.chain().focus().setColor(e.target.value).run()}
-                                className="color-input"
-                                disabled={!editor || isDisabled}
-                            />
-                        </button>
-                    </div>
-                    <button
-                        type="button"
-                        title="Highlight"
-                        onClick={() => editor?.chain().focus().toggleHighlight().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('highlight') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <HighlightIcon sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Lists */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Bullet List"
-                        onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('bulletList') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatListBulleted sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Numbered List"
-                        onClick={() => editor?.chain().focus().toggleOrderedList().run()}
-                        disabled={!editor || isDisabled}
-                        className={`toolbar-icon-btn ${editor?.isActive('orderedList') ? 'active' : ''} ${(!editor || isDisabled) ? 'disabled' : ''}`}
-                    >
-                        <FormatListNumbered sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Alignment */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Align Left"
-                        onClick={() => editor?.chain().focus().setTextAlign('left').run()}
-                        className={`toolbar-icon-btn ${editor?.isActive({ textAlign: 'left' }) ? 'active' : ''}`}
-                    >
-                        <FormatAlignLeft sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Align Center"
-                        onClick={() => editor?.chain().focus().setTextAlign('center').run()}
-                        className={`toolbar-icon-btn ${editor?.isActive({ textAlign: 'center' }) ? 'active' : ''}`}
-                    >
-                        <FormatAlignCenter sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Align Right"
-                        onClick={() => editor?.chain().focus().setTextAlign('right').run()}
-                        className={`toolbar-icon-btn ${editor?.isActive({ textAlign: 'right' }) ? 'active' : ''}`}
-                    >
-                        <FormatAlignRight sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Justify"
-                        onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
-                        className={`toolbar-icon-btn ${editor?.isActive({ textAlign: 'justify' }) ? 'active' : ''}`}
-                    >
-                        <FormatAlignJustify sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* Insert Elements */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Insert Link"
-                        onClick={() => {
-                            if (!editor) return;
-                            const previousUrl = editor.getAttributes('link').href;
-                            const url = window.prompt('Enter URL:', previousUrl);
-
-                            if (url === null) return;
-
-                            if (url === '') {
-                                editor.chain().focus().extendMarkRange('link').unsetLink().run();
-                                return;
-                            }
-
-                            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-                        }}
-                        className={`toolbar-icon-btn ${editor?.isActive('link') ? 'active' : ''}`}
-                    >
-                        <LinkIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Insert Image"
-                        onClick={() => {
-                            if (!editor) return;
-                            const url = window.prompt('Enter image URL:');
-                            if (url) {
-                                editor.chain().focus().setImage({ src: url }).run();
-                            }
-                        }}
-                        className="toolbar-icon-btn"
-                    >
-                        <ImageIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Insert Table"
-                        onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-                        className="toolbar-icon-btn"
-                    >
-                        <TableChart sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-
-                <div className="toolbar-divider"></div>
-
-                {/* More Formatting */}
-                <div className="toolbar-group">
-                    <button
-                        type="button"
-                        title="Code"
-                        onClick={() => editor?.chain().focus().toggleCode().run()}
-                        className={`toolbar-icon-btn ${editor?.isActive('code') ? 'active' : ''}`}
-                    >
-                        <CodeIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Blockquote"
-                        onClick={() => editor?.chain().focus().toggleBlockquote().run()}
-                        className={`toolbar-icon-btn ${editor?.isActive('blockquote') ? 'active' : ''}`}
-                    >
-                        <FormatQuote sx={{ fontSize: 18 }} />
-                    </button>
-
-                    <button
-                        type="button"
-                        title="Horizontal Rule"
-                        onClick={() => editor?.chain().focus().setHorizontalRule().run()}
-                        className="toolbar-icon-btn"
-                    >
-                        <HorizontalRuleIcon sx={{ fontSize: 18 }} />
-                    </button>
-                    <button
-                        type="button"
-                        title="Clear Formatting"
-                        onClick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}
-                        className="toolbar-icon-btn clear-formatting"
-                    >
-                        <ClearAll sx={{ fontSize: 18 }} />
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tiptapToken: string | null; onPlaceholdersChange: (placeholders: PlaceholderPos[]) => void }>(({ onUpdate, docUrl, tiptapToken, onPlaceholdersChange }, ref) => {
+/**
+ * Core Tiptap editor component with advanced functionality
+ * Handles document editing, placeholder detection, and DOCX import
+ */
+const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { 
+    tiptapToken: string | null; 
+    onPlaceholdersChange: (placeholders: PlaceholderPos[]) => void 
+}>(({ onUpdate, docUrl, tiptapToken, onPlaceholdersChange }, ref) => {
+    
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
+    
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
     const [hasImportedDocx, setHasImportedDocx] = useState(false);
 
+    // ============================================================================
+    // UTILITY FUNCTIONS
+    // ============================================================================
+
+    /**
+     * Check if a placeholder is empty or contains only whitespace
+     * 
+     * @param rawText - The raw placeholder text to check
+     * @returns True if the placeholder is empty
+     */
+    const isEmptyPlaceholder = useCallback((rawText: string) => {
+        // Check for empty placeholders like [], {}, {{}}
+        if (rawText === '[]' || rawText === '{}' || rawText === '{{}}') {
+            return true;
+        }
+
+        // Check for placeholders with only whitespace
+        if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
+            const content = rawText.slice(2, -2).trim();
+            return content === '';
+        } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
+            const content = rawText.slice(1, -1).trim();
+            return content === '';
+        }
+
+        return false;
+    }, []);
+
+    /**
+     * Find all placeholders in the current editor content
+     * Supports multiple placeholder formats: {{variable}}, [variable], {{variable|label}}
+     * 
+     * @param editorInstance - The Tiptap editor instance
+     * @returns Array of placeholder positions and metadata
+     */
+    const findPlaceholders = useCallback((editorInstance: any) => {
+        if (!editorInstance) return [];
+        
+        const placeholderRegex = /{{.*?}}|\[.*?\]/g;
+        const found: PlaceholderPos[] = [];
+
+        // Traverse all text nodes in the document
+        editorInstance.state.doc.descendants((node: any, pos: number) => {
+            if (!node.isText) return;
+
+            const text = node.text || '';
+            let match;
+            const regex = new RegExp(placeholderRegex.source, 'g'); // Create new regex instance for each text node
+
+            // Find all placeholder matches in this text node
+            while ((match = regex.exec(text)) !== null) {
+                const rawText = match[0];
+
+                // Skip empty placeholders for cleaner navigation
+                if (isEmptyPlaceholder(rawText)) {
+                    continue;
+                }
+
+                let label = rawText;
+
+                // Handle different placeholder formats
+                if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
+                    // Format: {{variable|label}} - extract the label
+                    const parts = rawText.slice(2, -2).split('|');
+                    if (parts.length > 1) {
+                        const potentialLabel = parts[parts.length - 2];
+                        if (potentialLabel) {
+                            label = potentialLabel.trim();
+                        }
+                    }
+                } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
+                    // Format: [variable] - extract the variable name
+                    label = rawText.slice(1, -1).trim();
+                }
+
+                found.push({
+                    text: rawText,
+                    label: label,
+                    from: pos + match.index,
+                    to: pos + match.index + rawText.length,
+                });
+            }
+        });
+
+        // Debug log to see how many placeholders were found
+        console.log(`Found ${found.length} placeholders:`, found.map(p => p.text));
+
+        return found;
+    }, [isEmptyPlaceholder]);
+
+    // ============================================================================
+    // EDITOR EXTENSIONS CONFIGURATION
+    // ============================================================================
+
+    /**
+     * Configure Tiptap extensions based on available features
+     * Dynamically includes DOCX import if token is available
+     */
     const extensions = useMemo(() => {
         const baseExtensions = [
             StarterKit.configure({
@@ -460,7 +296,7 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
             Underline,
             VariableHighlightExtension,
             FontSize,
-            // Add FontFamily extension
+            // Custom FontFamily extension
             Extension.create({
                 name: 'fontFamily',
                 addGlobalAttributes() {
@@ -516,77 +352,16 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         return baseExtensions;
     }, [tiptapToken]);
 
-    // Helper function to check if a placeholder is empty
-    const isEmptyPlaceholder = useCallback((rawText: string) => {
-        // Check for empty placeholders like [], {}, {{}}
-        if (rawText === '[]' || rawText === '{}' || rawText === '{{}}') {
-            return true;
-        }
+    // ============================================================================
+    // EDITOR INSTANCE
+    // ============================================================================
 
-        // Check for placeholders with only whitespace
-        if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
-            const content = rawText.slice(2, -2).trim();
-            return content === '';
-        } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
-            const content = rawText.slice(1, -1).trim();
-            return content === '';
-        }
-
-        return false;
-    }, []);
-
-    const findPlaceholders = useCallback((editorInstance: any) => {
-        if (!editorInstance) return [];
-        const placeholderRegex = /{{.*?}}|\[.*?\]/g;
-        const found: PlaceholderPos[] = [];
-
-        editorInstance.state.doc.descendants((node: any, pos: number) => {
-            if (!node.isText) return;
-
-            const text = node.text || '';
-            let match;
-            const regex = new RegExp(placeholderRegex.source, 'g'); // Create new regex instance for each text node
-
-            while ((match = regex.exec(text)) !== null) {
-                const rawText = match[0];
-
-                // Skip empty placeholders for the navigation list
-                if (isEmptyPlaceholder(rawText)) {
-                    continue;
-                }
-
-                let label = rawText;
-
-                if (rawText.startsWith('{{') && rawText.endsWith('}}')) {
-                    const parts = rawText.slice(2, -2).split('|');
-                    if (parts.length > 1) {
-                        const potentialLabel = parts[parts.length - 2];
-                        if (potentialLabel) {
-                            label = potentialLabel.trim();
-                        }
-                    }
-                } else if (rawText.startsWith('[') && rawText.endsWith(']')) {
-                    label = rawText.slice(1, -1).trim();
-                }
-
-                found.push({
-                    text: rawText,
-                    label: label,
-                    from: pos + match.index,
-                    to: pos + match.index + rawText.length,
-                });
-            }
-        });
-
-        // Debug log to see how many placeholders were found
-        console.log(`Found ${found.length} placeholders:`, found.map(p => p.text));
-
-        return found;
-    }, [isEmptyPlaceholder]);
-
-        // Ref to store the timeout ID for cleanup
+    // Ref to store the timeout ID for cleanup
     const placeholderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+    /**
+     * Initialize the Tiptap editor with configured extensions
+     */
     const editor = useEditor({
         extensions,
         content: '',
@@ -613,15 +388,32 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         }
     });
 
+    // ============================================================================
+    // PLACEHOLDER NAVIGATION
+    // ============================================================================
+
+    /**
+     * Navigate the editor cursor to a specific placeholder position
+     * 
+     * @param placeholder - The placeholder position information
+     */
     const handlePlaceholderNavigation = useCallback((placeholder: PlaceholderPos) => {
         if (!editor || !placeholder) return;
 
         const { from, to } = placeholder;
-
         editor.chain().focus().setTextSelection({ from, to }).run();
-
     }, [editor]);
 
+    // ============================================================================
+    // DOCX IMPORT FUNCTIONALITY
+    // ============================================================================
+
+    /**
+     * Import a DOCX file into the editor
+     * Handles file processing and content insertion
+     * 
+     * @param file - The DOCX file to import
+     */
     const importDocxFile = useCallback(async (file: File) => {
         if (!file || !editor) return;
 
@@ -668,6 +460,14 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         }
     }, [editor, onPlaceholdersChange, findPlaceholders]);
 
+    // ============================================================================
+    // EFFECTS & LIFECYCLE MANAGEMENT
+    // ============================================================================
+
+    /**
+     * Handle DOCX import from URL when component mounts
+     * Automatically imports documents from provided docUrl
+     */
     useEffect(() => {
         if (docUrl && docUrl.toLowerCase().endsWith('.docx') && editor && tiptapToken && !hasImportedDocx) {
             const importFromUrl = async () => {
@@ -725,9 +525,10 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         }
     }, [docUrl, editor, importDocxFile, tiptapToken, hasImportedDocx]);
 
-
-
-    // Detect placeholders when editor is ready (for documents without URL)
+    /**
+     * Detect placeholders when editor is ready (for documents without URL)
+     * Handles initial placeholder detection for new documents
+     */
     useEffect(() => {
         if (editor && !isLoading && onPlaceholdersChange && !docUrl) {
             const timeoutId = setTimeout(() => {
@@ -741,7 +542,10 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         }
     }, [editor, isLoading, onPlaceholdersChange, findPlaceholders, docUrl]);
 
-    // Cleanup effect to ensure proper destruction
+    /**
+     * Cleanup effect to ensure proper destruction
+     * Prevents memory leaks and ensures clean editor shutdown
+     */
     useEffect(() => {
         return () => {
             if (editor) {
@@ -754,6 +558,14 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         };
     }, [editor]);
 
+    // ============================================================================
+    // IMPERATIVE HANDLE
+    // ============================================================================
+
+    /**
+     * Expose editor methods and state through ref
+     * Allows parent components to interact with the editor
+     */
     useImperativeHandle(ref, () => ({
         getContent: () => editor?.getHTML() || '',
         setContent: (content: string) => editor?.commands.setContent(content, true) || false,
@@ -763,6 +575,10 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         isLoading: isLoading,
         editor: editor, // Expose editor instance for external toolbar
     }));
+
+    // ============================================================================
+    // RENDER
+    // ============================================================================
 
     if (!editor) {
         return null;
@@ -774,14 +590,35 @@ const TiptapEditorCore = forwardRef<TiptapEditorRef, TiptapEditorProps & { tipta
         </div>
     );
 });
+
 TiptapEditorCore.displayName = 'TiptapEditorCore';
 
+// ============================================================================
+// MAIN EDITOR COMPONENT
+// ============================================================================
 
+/**
+ * Main Tiptap editor component with token management
+ * Handles Tiptap Pro token fetching and provides fallback functionality
+ */
 const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate, docUrl, onPlaceholders }, ref) => {
+    
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
+    
     const [tiptapToken, setTiptapToken] = useState<string | null>(null);
     const [error, setError] = useState<Error | null>(null);
     const editorCoreRef = useRef<TiptapEditorRef>(null);
 
+    // ============================================================================
+    // TOKEN MANAGEMENT
+    // ============================================================================
+
+    /**
+     * Fetch Tiptap Pro token for advanced features
+     * Handles timeout and error scenarios gracefully
+     */
     useEffect(() => {
         const fetchTiptapToken = async () => {
             try {
@@ -827,6 +664,14 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
         fetchTiptapToken();
     }, []);
 
+    // ============================================================================
+    // IMPERATIVE HANDLE
+    // ============================================================================
+
+    /**
+     * Expose editor methods through ref
+     * Provides unified interface regardless of token availability
+     */
     useImperativeHandle(ref, () => ({
         getContent: () => {
             const content = editorCoreRef.current?.getContent();
@@ -840,12 +685,20 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
         editor: editorCoreRef.current?.editor || null, // Expose editor instance
     }));
 
+    // ============================================================================
+    // ERROR HANDLING
+    // ============================================================================
+
     if (error && error.message.includes('timed out')) {
         // Don't block the editor for timeout errors, just show a warning
         console.warn('Tiptap Pro features unavailable:', error.message);
     } else if (error && !error.message.includes('timed out')) {
         return <div className="hint error">Error: {error.message}</div>;
     }
+
+    // ============================================================================
+    // RENDER LOGIC
+    // ============================================================================
 
     // Only render the editor when we have a valid token or when there's no error
     if (!tiptapToken) {
@@ -865,8 +718,6 @@ const TiptapEditor = forwardRef<TiptapEditorRef, TiptapEditorProps>(({ onUpdate,
         // If no token and no error, show loading
         return <SpinnerLoader />
     }
-
-
 
     // Only pass docUrl if we have a valid token
     return (
